@@ -583,7 +583,7 @@ class SyncService extends ChangeNotifier {
       'month': month.toString(),
       'year': year.toString(),
     });
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     // server student id -> local student id
     final students = await _db.query('students');
     final stuByServer = <int, int>{};
@@ -790,7 +790,7 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullClasses(Map<String, Map<int, int>> idMaps) async {
     final res = await _c.get('/api/academics/classes');
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     for (final c in list) {
       final serverId = (c['id'] as num).toInt();
       final localId = await _upsertPulled('classes', serverId, {
@@ -822,7 +822,7 @@ class SyncService extends ChangeNotifier {
     } on ApiException {
       return; // endpoint may not exist for this role; skip
     }
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     for (final j in list) {
       final serverId = (j['id'] as num?)?.toInt();
       if (serverId == null) continue;
@@ -853,7 +853,7 @@ class SyncService extends ChangeNotifier {
     } on ApiException {
       return;
     }
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     for (final j in list) {
       final serverId = (j['id'] as num).toInt();
       final data = Map<String, dynamic>.from(j);
@@ -896,7 +896,7 @@ class SyncService extends ChangeNotifier {
     } on ApiException {
       return;
     }
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     for (final j in list) {
       final serverId = (j['id'] as num).toInt();
       await _upsertPulled('staff', serverId, {
@@ -919,7 +919,7 @@ class SyncService extends ChangeNotifier {
         continue;
       }
       // Server expands ranges into individual day entries; store each day.
-      final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+      final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
       for (final j in list) {
         final date = j['date']?.toString() ?? '';
         final rows = await _db.query('holidays',
@@ -949,7 +949,7 @@ class SyncService extends ChangeNotifier {
     } on ApiException {
       return;
     }
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     for (final j in list) {
       final serverId = (j['id'] as num).toInt();
       final localStu = _localId(idMaps, 'students', j['student_id']);
@@ -974,7 +974,7 @@ class SyncService extends ChangeNotifier {
     } on ApiException {
       return;
     }
-    final list = (res as List? ?? []).cast<Map>().map((e) => (e as Map).cast<String, dynamic>());
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
     // receipt -> server challan id -> local challan id
     final challanRows = await _db.query('fee_challans');
     final challanByServer = <int, int>{};
