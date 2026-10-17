@@ -81,7 +81,7 @@ class _PromoteScreenState extends State<PromoteScreen> {
             toClassId: _toClassId!,
             promotedIds: _promoteIds.toList(),
             retainedIds: retained,
-            sessionId: sessionId ?? 0,
+            sessionId: sessionId,
           );
       if (!mounted) return;
       showSnack(context,

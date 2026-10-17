@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   /// True when the current session was established without internet
   /// (cached credentials). Drives the "Offline mode" banner.
   bool get offlineMode => _offlineMode;
+  bool get isParent => _user?.isParent ?? false;
 
   AuthProvider() {
     BackendClient.onUnauthorized = () {

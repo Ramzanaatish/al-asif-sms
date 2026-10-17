@@ -7,6 +7,7 @@ import '../../providers/academics_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/loading_view.dart';
 import '../../widgets/school_app_bar.dart';
+import '../../config.dart';
 import '../../widgets/ui_helpers.dart';
 
 class AdmissionScreen extends StatefulWidget {
