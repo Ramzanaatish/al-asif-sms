@@ -1,0 +1,137 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config.dart';
+
+/// Thrown when the device cannot reach the server (offline, timeout, DNS...).
+class NetworkException implements Exception {
+  final String message;
+  NetworkException(this.message);
+  @override
+  String toString() => 'NetworkException: $message';
+}
+
+/// Thrown for non-2xx HTTP responses (other than 401, which auto-logs-out).
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+  ApiException(this.statusCode, this.message);
+  @override
+  String toString() => 'ApiException($statusCode): $message';
+}
+
+/// Singleton HTTP client for the FastAPI backend.
+///
+/// Endpoint paths come straight from API_CONTRACT.md. A 401 response clears
+/// the stored JWT and fires [onUnauthorized] so the UI can drop to login.
+class BackendClient {
+  BackendClient._internal();
+  static final BackendClient instance = BackendClient._internal();
+
+  /// Set by AuthProvider; invoked on 401.
+  static VoidCallback? onUnauthorized;
+
+  static const Duration _timeout = Duration(seconds: 25);
+
+  String? _token;
+  SharedPreferences? _prefs;
+
+  Future<void> init() async {
+    _prefs ??= await SharedPreferences.getInstance();
+    _token = _prefs!.getString('jwt_token');
+  }
+
+  bool get hasToken => _token != null;
+
+  /// Current token (exposed so AuthProvider can detect offline sessions).
+  String? get token => _token;
+
+  Future<void> setToken(String token) async {
+    _token = token;
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.setString('jwt_token', token);
+  }
+
+  Future<void> saveUserJson(Map<String, dynamic> json) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.setString('user_json', jsonEncode(json));
+  }
+
+  Future<void> clearToken() async {
+    _token = null;
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.remove('jwt_token');
+    await _prefs!.remove('user_json');
+  }
+
+  Map<String, String> _headers() {
+    final h = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (_token != null) h['Authorization'] = 'Bearer $_token';
+    return h;
+  }
+
+  Uri _uri(String path, [Map<String, String?>? query]) {
+    final q = <String, String>{};
+    query?.forEach((k, v) {
+      if (v != null && v.isNotEmpty) q[k] = v;
+    });
+    return Uri.parse('${AppConfig.apiBaseUrl}$path')
+        .replace(queryParameters: q.isEmpty ? null : q);
+  }
+
+  Future<dynamic> _send(Future<http.Response> Function() call) async {
+    late http.Response res;
+    try {
+      res = await call().timeout(_timeout);
+    } on TimeoutException {
+      throw NetworkException('Request timed out. Check your connection.');
+    } on SocketException {
+      throw NetworkException('No network connection to the server.');
+    } on http.ClientException {
+      throw NetworkException('Could not reach the server.');
+    }
+    if (res.statusCode == 401) {
+      await clearToken();
+      onUnauthorized?.call();
+      throw ApiException(401, 'Session expired. Please log in again.');
+    }
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (res.body.isEmpty) return <String, dynamic>{};
+      return jsonDecode(res.body);
+    }
+    var msg = 'Request failed (${res.statusCode})';
+    try {
+      final body = jsonDecode(res.body);
+      if (body is Map && body['detail'] != null) {
+        msg = body['detail'].toString();
+      }
+    } catch (_) {}
+    throw ApiException(res.statusCode, msg);
+  }
+
+  Future<dynamic> get(String path, {Map<String, String?>? query}) =>
+      _send(() => http.get(_uri(path, query), headers: _headers()));
+
+  Future<dynamic> post(String path, {Object? body}) => _send(() => http.post(
+        _uri(path),
+        headers: _headers(),
+        body: body == null ? null : jsonEncode(body),
+      ));
+
+  Future<dynamic> put(String path, {Object? body}) => _send(() => http.put(
+        _uri(path),
+        headers: _headers(),
+        body: body == null ? null : jsonEncode(body),
+      ));
+
+  Future<dynamic> delete(String path) =>
+      _send(() => http.delete(_uri(path), headers: _headers()));
+}
