@@ -76,7 +76,7 @@ class AnnualProgressUrduPdf {
                   ...result.subjects.map((sub) {
                     final total = subjectTotals[sub] ?? 100;
                     final obt = s.marks[sub] ?? 0;
-                    final pct = total > 0 ? obt / total * 100 : 0;
+                    final pct = total > 0 ? obt / total * 100 : 0.0;
                     return pw.TableRow(
                       children: [
                         _cell(sub, font, bold: true),
