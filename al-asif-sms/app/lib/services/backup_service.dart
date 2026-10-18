@@ -205,14 +205,10 @@ class BackupService extends ChangeNotifier {
     notifyListeners();
     try {
       final dir = await backupDir();
-      // Close the DB for a stable, complete file snapshot, then reopen.
-      await _db.close();
-      List<int> bytes;
-      try {
-        bytes = await File(await _db.dbPath()).readAsBytes();
-      } finally {
-        await _db.db;
-      }
+      // Do NOT close the DB here: backups run in the background after every
+      // write and closing it broke in-flight queries (database_closed).
+      await _db.checkpoint();
+      final List<int> bytes = await File(await _db.dbPath()).readAsBytes();
       final digest = sha256.convert(bytes).toString();
       final counts = <String, int>{};
       for (final t in _countedTables) {

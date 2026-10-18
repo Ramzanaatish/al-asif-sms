@@ -29,6 +29,11 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.debug
+            // R8 renames/strips Kotlin methods that shared_preferences_android
+            // looks up by name via JNI -> NoSuchMethodError at startup.
+            minifyEnabled = false
+            shrinkResources = false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }

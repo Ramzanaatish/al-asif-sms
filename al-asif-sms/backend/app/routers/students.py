@@ -27,6 +27,8 @@ def _out(s: Student) -> dict:
 def list_students(class_id: int | None = None, section_id: int | None = None,
                   status: str = "active", search: str | None = None,
                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if user.role == "parent":
+        raise HTTPException(403, "Not allowed for this role")
     q = db.query(Student)
     if status != "all":
         q = q.filter(Student.status == status)
@@ -83,6 +85,8 @@ def next_admission_no(db: Session = Depends(get_db), user: User = Depends(STAFF)
 @router.get("/{sid}")
 def get_student(sid: int, db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)):
+    if user.role == "parent" and user.linked_student_id != sid:
+        raise HTTPException(403, "Not allowed for this role")
     s = db.query(Student).get(sid)
     if not s:
         raise HTTPException(404, "Student not found")
@@ -106,6 +110,11 @@ def update_student(sid: int, data: StudentIn, db: Session = Depends(get_db),
     if not s:
         raise HTTPException(404, "Student not found")
     for k, v in data.model_dump().items():
+        if k == "admission_no" and not v:
+            continue  # keep the existing admission number
+        if k == "admission_no" and v != s.admission_no and db.query(Student).filter(
+                Student.admission_no == v, Student.id != sid).first():
+            raise HTTPException(400, "Admission number already exists")
         setattr(s, k, v)
     db.commit()
     audit(db, user, "update_student", "student", sid, s.name)

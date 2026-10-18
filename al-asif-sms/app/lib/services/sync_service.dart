@@ -163,6 +163,7 @@ class SyncService extends ChangeNotifier {
       await _db.setMeta('last_sync', _lastSyncAt!);
     } on NetworkException {
       _hasNetwork = false; // connectivity said up, server unreachable
+      _scheduleRetry();
     } catch (e) {
       _lastError = e.toString();
     } finally {
@@ -170,6 +171,24 @@ class SyncService extends ChangeNotifier {
       await _refreshPending();
       notifyListeners();
     }
+  }
+
+  Timer? _retryTimer;
+
+  /// Server unreachable while the radio is up (server restart, wrong URL,
+  /// captive wifi): without this the app stayed 'offline' until restart,
+  /// because the connectivity stream only fires on radio changes.
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 60), () async {
+      try {
+        final cur = await Connectivity().checkConnectivity();
+        if (cur.contains(ConnectivityResult.none)) return;
+      } catch (_) {}
+      _hasNetwork = true;
+      notifyListeners();
+      unawaited(syncNow());
+    });
   }
 
   // ================================================================ PUSH
@@ -236,7 +255,11 @@ class SyncService extends ChangeNotifier {
       // Server-side validation failures should not block the queue forever.
       await _db.bumpAttempts(qid);
       if (e.statusCode == 404 || LocalDb.intOf(op['attempts']) >= 5) {
-        await _db.dequeue(qid); // gone on server, or persistently invalid
+        // Gone on server, or persistently invalid. Never lose it silently:
+        // keep the full payload in the audit log so it can be re-entered.
+        await _db.audit('system', 'sync_dropped', entity, localId,
+            'HTTP ${e.statusCode}: ${e.message} | op=$opp | payload=${jsonEncode(payload)}');
+        await _db.dequeue(qid);
         return true;
       }
       return false;

@@ -1,3 +1,5 @@
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -39,7 +41,7 @@ def add_staff(data: StaffIn, db: Session = Depends(get_db), user: User = Depends
     return _out(s)
 
 
-@router.get("/{sid}")
+@router.get("/{sid:int}")
 def get_staff(sid: int, db: Session = Depends(get_db), user: User = Depends(HR)):
     s = db.query(Staff).get(sid)
     if not s:
@@ -47,7 +49,7 @@ def get_staff(sid: int, db: Session = Depends(get_db), user: User = Depends(HR))
     return _out(s)
 
 
-@router.put("/{sid}")
+@router.put("/{sid:int}")
 def update_staff(sid: int, data: StaffIn, db: Session = Depends(get_db),
                  user: User = Depends(MANAGE)):
     s = db.query(Staff).get(sid)
@@ -130,7 +132,7 @@ def pay_salary(data: SalaryIn, db: Session = Depends(get_db), user: User = Depen
     net = basic + data.allowances - data.deductions
     p = SalaryPayment(staff_id=st.id, month=data.month, year=data.year, basic=basic,
                       allowances=data.allowances, deductions=data.deductions,
-                      net=net, paid_by=user.id)
+                      net=net, paid_by=user.id, paid_date=dt.date.today())
     db.add(p)
     try:
         db.commit()

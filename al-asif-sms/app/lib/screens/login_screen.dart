@@ -50,6 +50,35 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _editServer() async {
+    final ctrl = TextEditingController(text: AppConfig.apiBaseUrl);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Server address'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+              hintText: 'http://192.168.1.50:8000'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await BackendClient.instance.setBaseUrl(ctrl.text);
+      if (mounted) setState(() {});
+    }
+    ctrl.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,7 +120,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _userCtrl,
                       decoration: fieldDecoration('Username'),
                       textInputAction: TextInputAction.next,
-                      onSubmitted: (_) => _login(),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -128,6 +156,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             : const Text('Log In',
                                 style: TextStyle(fontSize: 16)),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: _busy ? null : _editServer,
+                      icon: const Icon(Icons.dns_outlined, size: 16),
+                      label: Text('Server: ${AppConfig.apiBaseUrl}',
+                          style: const TextStyle(fontSize: 12),
+                          overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),

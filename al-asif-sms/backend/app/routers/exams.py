@@ -60,6 +60,9 @@ def add_datesheet(data: DateSheetIn, db: Session = Depends(get_db),
 def save_marks(data: MarksIn, db: Session = Depends(get_db), user: User = Depends(STAFF)):
     saved = 0
     for r in data.records:
+        if r.obtained_marks < 0 or r.obtained_marks > data.total_marks:
+            raise HTTPException(400, f"Invalid marks for student {r.student_id}")
+    for r in data.records:
         m = db.query(Mark).filter(Mark.term_id == data.term_id,
                                   Mark.subject_id == data.subject_id,
                                   Mark.student_id == r.student_id).first()

@@ -63,6 +63,9 @@ def receipts(month: int | None = None, year: int | None = None,
         ru = db.query(User).get(r.received_by) if r.received_by else None
         out.append(_receipt_out(r, c, ru.full_name if ru else ""))
     return out
+
+
+def _challan_out(c: FeeChallan) -> dict:
     balance = round(c.total_amount - c.discount - c.amount_paid, 2)
     return {"id": c.id, "challan_no": c.challan_no, "student_id": c.student_id,
             "student_name": c.student.name if c.student else "",

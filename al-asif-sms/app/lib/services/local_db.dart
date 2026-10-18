@@ -31,11 +31,27 @@ class LocalDb {
 
   Database? _db;
 
+  Future<Database>? _opening;
+
   Future<Database> get db async {
     final d = _db;
     if (d != null) return d;
-    _db = await _open();
+    // Serialise concurrent first-callers so the DB is opened/seeded once.
+    final f = _opening ??= _open();
+    try {
+      _db = await f;
+    } finally {
+      _opening = null;
+    }
     return _db!;
+  }
+
+  /// Flush any WAL content into the main file so a plain file copy is complete.
+  Future<void> checkpoint() async {
+    final d = await db;
+    try {
+      await d.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
   }
 
   /// Absolute path of the database file.

@@ -143,6 +143,17 @@ class FeesRepository {
     final crow = await _db.getById('fee_challans', challanId);
     if (crow == null) throw Exception('Challan not found');
     final cdata = Map<String, dynamic>.from(_rowJson(crow));
+    if (amount <= 0 || discount < 0) {
+      throw Exception('Invalid amount.');
+    }
+    final remaining = LocalDb.doubleOf(cdata['total_amount']) -
+        LocalDb.doubleOf(cdata['discount']) -
+        LocalDb.doubleOf(cdata['amount_paid']) -
+        discount;
+    if (amount > remaining + 0.01) {
+      throw Exception(
+          'Amount exceeds the remaining balance (${remaining.toStringAsFixed(0)}).');
+    }
     final newDiscount = LocalDb.doubleOf(cdata['discount']) + discount;
     final newPaid = LocalDb.doubleOf(cdata['amount_paid']) + amount;
     final total = LocalDb.doubleOf(cdata['total_amount']);

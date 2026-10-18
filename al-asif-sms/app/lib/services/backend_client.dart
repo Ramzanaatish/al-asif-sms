@@ -44,6 +44,25 @@ class BackendClient {
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
     _token = _prefs!.getString('jwt_token');
+    final savedUrl = _prefs!.getString('api_base_url');
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      AppConfig.apiBaseUrl = savedUrl;
+    }
+  }
+
+  /// Persist a new server address (e.g. http://192.168.1.50:8000).
+  Future<void> setBaseUrl(String url) async {
+    var u = url.trim();
+    while (u.endsWith('/')) {
+      u = u.substring(0, u.length - 1);
+    }
+    if (u.isNotEmpty && !u.startsWith('http://') && !u.startsWith('https://')) {
+      u = 'http://$u';
+    }
+    if (u.isEmpty) return;
+    AppConfig.apiBaseUrl = u;
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.setString('api_base_url', u);
   }
 
   bool get hasToken => _token != null;
@@ -74,7 +93,9 @@ class BackendClient {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    if (_token != null) h['Authorization'] = 'Bearer $_token';
+    if (_token != null && _token != 'offline') {
+      h['Authorization'] = 'Bearer $_token';
+    }
     return h;
   }
 
@@ -87,7 +108,14 @@ class BackendClient {
         .replace(queryParameters: q.isEmpty ? null : q);
   }
 
-  Future<dynamic> _send(Future<http.Response> Function() call) async {
+  Future<dynamic> _send(Future<http.Response> Function() call,
+      {bool isLogin = false}) async {
+    // An offline-login session has no real JWT. Never send the fake token:
+    // the server would answer 401 and force-logout the user mid-sync.
+    if (!isLogin && _token == 'offline') {
+      throw NetworkException(
+          'Offline session. Log in again while online to sync.');
+    }
     late http.Response res;
     try {
       res = await call().timeout(_timeout);
@@ -97,6 +125,14 @@ class BackendClient {
       throw NetworkException('No network connection to the server.');
     } on http.ClientException {
       throw NetworkException('Could not reach the server.');
+    }
+    if (res.statusCode == 401 && isLogin) {
+      var m = 'Invalid username or password';
+      try {
+        final b = jsonDecode(res.body);
+        if (b is Map && b['detail'] != null) m = b['detail'].toString();
+      } catch (_) {}
+      throw ApiException(401, m);
     }
     if (res.statusCode == 401) {
       await clearToken();
@@ -120,11 +156,14 @@ class BackendClient {
   Future<dynamic> get(String path, {Map<String, String?>? query}) =>
       _send(() => http.get(_uri(path, query), headers: _headers()));
 
-  Future<dynamic> post(String path, {Object? body}) => _send(() => http.post(
-        _uri(path),
-        headers: _headers(),
-        body: body == null ? null : jsonEncode(body),
-      ));
+  Future<dynamic> post(String path, {Object? body, bool isLogin = false}) =>
+      _send(
+          () => http.post(
+                _uri(path),
+                headers: _headers(),
+                body: body == null ? null : jsonEncode(body),
+              ),
+          isLogin: isLogin);
 
   Future<dynamic> put(String path, {Object? body}) => _send(() => http.put(
         _uri(path),

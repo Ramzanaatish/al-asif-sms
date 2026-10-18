@@ -14,11 +14,12 @@ STAFF = require_roles("principal", "administrator", "teacher")
 @router.get("/notices")
 def notices(audience: str | None = None, db: Session = Depends(get_db),
             user: User = Depends(get_current_user)):
-    q = db.query(Notice).order_by(Notice.created_at.desc()).limit(100)
+    q = db.query(Notice)
     if user.role == "parent":
         q = q.filter(Notice.audience.in_(["all", "parents"]))
     elif audience:
         q = q.filter(Notice.audience == audience)
+    q = q.order_by(Notice.created_at.desc()).limit(100)
     return [{"id": n.id, "title": n.title, "body": n.body,
              "audience": n.audience, "created_at": n.created_at} for n in q.all()]
 

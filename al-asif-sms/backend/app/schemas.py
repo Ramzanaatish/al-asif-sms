@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     username: str
     full_name: str
     role: str
+    linked_student_id: int | None = None
 
     class Config:
         from_attributes = True
@@ -220,7 +221,7 @@ class ChallanGenIn(BaseModel):
 
 class CollectIn(BaseModel):
     amount: float = Field(gt=0)
-    discount: float = 0
+    discount: float = Field(default=0, ge=0)
     payment_method: str = "cash"
 
 

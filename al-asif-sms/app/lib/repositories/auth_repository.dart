@@ -19,7 +19,7 @@ class AuthRepository {
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final res = await _c.post('/api/auth/login',
-          body: {'username': username, 'password': password});
+          body: {'username': username, 'password': password}, isLogin: true);
       final user =
           (res['user'] as Map).cast<String, dynamic>();
       await _cacheCredentials(username, password, user);

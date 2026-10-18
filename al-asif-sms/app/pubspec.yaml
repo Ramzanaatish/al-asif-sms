@@ -12,11 +12,9 @@ dependencies:
   # Networking / state / storage
   http: '>=1.2.0 <2.0.0'
   provider: '>=6.1.0 <7.0.0'
-  shared_preferences: 2.5.6
-  # Pinned to match shared_preferences 2.5.6's Pigeon API exactly.
-  # (A version mismatch here white-screens the app at startup with
-  # NoSuchMethodError in SharedPreferencesApiRegistrar.getAll.)
-  shared_preferences_android: 2.5.0
+  # Let pub resolve a matching shared_preferences_android automatically
+  # (a manual pin caused a NoSuchMethodError in SharedPreferencesApiRegistrar.getAll).
+  shared_preferences: '>=2.5.3 <3.0.0'
   intl: '>=0.18.0 <0.21.0'
   # Offline-first: local SQLite database, connectivity monitoring,
   # SHA-256 for offline credential check.

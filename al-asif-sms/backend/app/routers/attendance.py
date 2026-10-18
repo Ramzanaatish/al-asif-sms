@@ -1,6 +1,6 @@
 import datetime as dt
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import audit, get_current_user, require_roles
@@ -116,9 +116,10 @@ def queue_absent_alerts(data: AbsentAlertIn, db: Session = Depends(get_db),
 @router.get("/alerts")
 def list_alerts(status: str | None = None, db: Session = Depends(get_db),
                 user: User = Depends(require_roles("principal", "administrator"))):
-    q = db.query(AlertQueue).order_by(AlertQueue.created_at.desc()).limit(200)
+    q = db.query(AlertQueue)
     if status:
         q = q.filter(AlertQueue.status == status)
+    q = q.order_by(AlertQueue.created_at.desc()).limit(200)
     return [{"id": a.id, "channel": a.channel, "recipient_phone": a.recipient_phone,
              "message": a.message, "status": a.status,
              "created_at": a.created_at} for a in q.all()]
@@ -142,7 +143,7 @@ def _holiday_dates(db: Session, start: dt.date, end: dt.date) -> list[dict]:
 def add_holiday(data: HolidayIn, db: Session = Depends(get_db),
                 user: User = Depends(require_roles("principal", "administrator"))):
     if data.end_date and data.end_date < data.date:
-        return {"error": "end_date cannot be before date"}
+        raise HTTPException(400, "end_date cannot be before date")
     h = Holiday(date=data.date, end_date=data.end_date, kind=data.kind,
                 description=data.description, created_by=user.id)
     db.add(h); db.commit(); db.refresh(h)
@@ -163,7 +164,7 @@ def delete_holiday(hid: int, db: Session = Depends(get_db),
                    user: User = Depends(require_roles("principal", "administrator"))):
     h = db.query(Holiday).filter(Holiday.id == hid).first()
     if not h:
-        return {"error": "not found"}
+        raise HTTPException(404, "Holiday not found")
     db.delete(h); db.commit()
     audit(db, user, "delete_holiday", "holiday", hid, "")
     return {"deleted": hid}
