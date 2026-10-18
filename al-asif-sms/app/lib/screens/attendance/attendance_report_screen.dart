@@ -185,6 +185,20 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                 ),
               ],
             ),
+            if (_classId != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Class Incharge: ${AppConfig.classTeacher(classes.firstWhere((c) => c.id == _classId, orElse: () => classes.first).name)}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.navy),
+                  ),
+                ),
+              ),
           ),
           Expanded(
             child: Consumer<AttendanceProvider>(
@@ -294,7 +308,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                                             horizontal: 8, vertical: 4),
                                         decoration: BoxDecoration(
                                           color: _feeColor(s.feeStatus)
-                                              .withOpacity(0.15),
+                                              .withValues(alpha: 0.15),
                                           borderRadius:
                                               BorderRadius.circular(12),
                                         ),

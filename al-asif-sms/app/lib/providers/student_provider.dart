@@ -42,6 +42,11 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateStudent(int id, Map<String, dynamic> body) async {
+    await _repo.update(id, body);
+    notifyListeners();
+  }
+
   /// Returns the raw mark-left response (student + certificate).
   Future<Map<String, dynamic>> markLeft(
           int id, String leavingDate, String reason) =>

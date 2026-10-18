@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../config.dart';
 import '../../providers/academics_provider.dart';
 import '../../providers/exams_provider.dart';
 import '../../providers/student_provider.dart';
@@ -55,6 +56,7 @@ class _MarksEntryScreenState extends State<MarksEntryScreen> {
       await context
           .read<StudentProvider>()
           .load(classId: _classId, status: 'active');
+      if (!mounted) return;
       final students = context.read<StudentProvider>().students;
       var existing = <int, double>{};
       try {
@@ -167,6 +169,20 @@ class _MarksEntryScreenState extends State<MarksEntryScreen> {
                     ),
                   ],
                 ),
+                if (_classId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, bottom: 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Class Incharge: ${AppConfig.classTeacher(acad.classes.firstWhere((c) => c.id == _classId, orElse: () => acad.classes.first).name)}',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.navy),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   children: [

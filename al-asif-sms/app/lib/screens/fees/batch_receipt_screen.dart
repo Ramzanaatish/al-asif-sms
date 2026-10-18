@@ -147,7 +147,7 @@ class _BatchReceiptScreenState extends State<BatchReceiptScreen> {
                         mainAxisAlignment:
                             MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${_selected.length} selected'),
+                          Expanded(child: Text('${_selected.length} selected')),
                           TextButton(
                             onPressed: () => setState(() {
                               if (_selected.length ==

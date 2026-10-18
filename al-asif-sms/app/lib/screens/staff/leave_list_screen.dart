@@ -32,6 +32,7 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
     if (!ok || !mounted) return;
     try {
       await context.read<StaffProvider>().decideLeave(id, decision);
+      if (!mounted) return;
       showSnack(context, 'Leave $decision.');
       _reload();
     } catch (e) {
@@ -98,10 +99,13 @@ class _LeaveListScreenState extends State<LeaveListScreen> {
                               mainAxisAlignment:
                                   MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(l.staffName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15)),
+                                Expanded(
+                                  child: Text(l.staffName,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15)),
+                                ),
                                 Chip(
                                   label: Text(l.status,
                                       style: const TextStyle(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../providers/auth_provider.dart';
 import '../services/backup_service.dart';
 import '../widgets/school_app_bar.dart';
 import '../widgets/ui_helpers.dart';
@@ -19,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
+  bool? _pwLoginEnabled;
 
   BackupService get _backups => BackupService.instance;
 
@@ -27,7 +30,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _backups.refreshStatus();
+      _loadPwSetting();
     });
+  }
+
+  Future<void> _loadPwSetting() async {
+    final v =
+        await context.read<AuthProvider>().isPasswordLoginEnabled();
+    if (mounted) setState(() => _pwLoginEnabled = v);
+  }
+
+  Future<void> _togglePwLogin(bool v) async {
+    setState(() => _pwLoginEnabled = v);
+    await context.read<AuthProvider>().setPasswordLoginEnabled(v);
+    if (!mounted) return;
+    showSnack(context,
+        v ? 'Password login ON. App will ask for login next time.'
+            : 'Password login OFF. App opens directly.');
+  }
+
+  Future<void> _changePassword() async {
+    final userCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Change password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: userCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Username (principal / teacher)'),
+            ),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: 'New password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final username = userCtrl.text.trim();
+    final np = passCtrl.text;
+    if (username.isEmpty || np.isEmpty) {
+      showSnack(context, 'Enter username and new password.', error: true);
+      return;
+    }
+    try {
+      await context
+          .read<AuthProvider>()
+          .changePassword(username, np);
+      if (mounted) showSnack(context, 'Password changed.');
+    } catch (e) {
+      if (mounted) showSnack(context, e.toString(), error: true);
+    }
   }
 
   Future<void> _backupNow() async {
@@ -125,6 +194,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const _SectionTitle('Login & Password'),
+              Card(
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Password login'),
+                      subtitle: const Text(
+                          'Off: app opens directly. On: asks username + password.'),
+                      value: _pwLoginEnabled ?? false,
+                      onChanged: _pwLoginEnabled == null
+                          ? null
+                          : _togglePwLogin,
+                    ),
+                    if (_pwLoginEnabled == true)
+                      ListTile(
+                        leading: const Icon(Icons.lock_outline),
+                        title: const Text('Change password'),
+                        subtitle: const Text(
+                            'For principal or teacher'),
+                        onTap: _changePassword,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               const _SectionTitle('Backup'),
               Card(
                 child: Padding(

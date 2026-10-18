@@ -46,6 +46,7 @@ class _PromoteScreenState extends State<PromoteScreen> {
     try {
       await context.read<StudentProvider>().load(
           classId: _fromClassId, status: 'active');
+      if (!mounted) return;
       _students = context.read<StudentProvider>().students;
       _promoteIds
         ..clear()
@@ -152,8 +153,10 @@ class _PromoteScreenState extends State<PromoteScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                          '${_promoteIds.length} promote, ${_students.length - _promoteIds.length} retain'),
+                      Expanded(
+                        child: Text(
+                            '${_promoteIds.length} promote, ${_students.length - _promoteIds.length} retain'),
+                      ),
                       TextButton(
                         onPressed: () => setState(() {
                           if (_promoteIds.length == _students.length) {

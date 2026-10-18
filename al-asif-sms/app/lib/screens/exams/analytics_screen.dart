@@ -132,10 +132,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                           MainAxisAlignment
                                               .spaceBetween,
                                       children: [
-                                        Text(s.subject,
-                                            style: const TextStyle(
-                                                fontWeight:
-                                                    FontWeight.w500)),
+                                        Expanded(
+                                          child: Text(s.subject,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w500)),
+                                        ),
                                         Text(
                                             '${s.avgPct.toStringAsFixed(1)}%'),
                                       ],

@@ -27,6 +27,24 @@ class AppConfig {
     '7th',
     '8th',
   ];
+
+  /// Class incharge (teacher) assignments — fixed by school management.
+  static const Map<String, String> classTeachers = {
+    'Play Group': 'Miss Asia',
+    'Nursery': 'Miss Nadia Ali',
+    'Prep': 'Mrs. Mehwish Sharif',
+    '1st': 'Miss Shakila',
+    '2nd': 'Miss Uzma',
+    '3rd': 'Miss Nadia Jamil',
+    '4th': 'Miss Akeela',
+    '5th': 'Miss Uzma',
+    '6th': 'Miss Zunaira',
+    '7th': 'Mrs. Saima Iqbal',
+    '8th': 'Mrs. Saima Iqbal',
+  };
+
+  static String classTeacher(String className) =>
+      classTeachers[className] ?? '-';
 }
 
 /// Brand palette.

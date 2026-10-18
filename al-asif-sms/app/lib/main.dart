@@ -49,6 +49,9 @@ class AlAsifApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFFF5F6FA),
+          snackBarTheme:
+              const SnackBarThemeData(behavior: SnackBarBehavior.floating),
           primaryColor: AppColors.navy,
           colorScheme: ColorScheme.fromSeed(
             seedColor: AppColors.navy,

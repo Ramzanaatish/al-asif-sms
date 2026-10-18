@@ -47,6 +47,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     try {
       await context.read<StudentProvider>().load(
           classId: _classId, sectionId: _sectionId, status: 'active');
+      if (!mounted) return;
       final students = context.read<StudentProvider>().students;
       // Pre-fill with any already-saved records for this date.
       var existing = <int, Map<String, String>>{};
@@ -275,6 +276,20 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                     ),
                   ],
                 ),
+                if (_classId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Class Incharge: ${AppConfig.classTeacher(classes.firstWhere((c) => c.id == _classId, orElse: () => classes.first).name)}',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.navy),
+                      ),
+                    ),
+                  ),
                 if (_marks.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Row(

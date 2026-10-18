@@ -32,6 +32,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _boot() async {
     await BackendClient.instance.init();
+    // Password login off (default): straight in as principal, no questions.
+    if (!await _repo.isPasswordLoginEnabled()) {
+      final res = await _repo.autoLogin();
+      final userJson = (res['user'] as Map).cast<String, dynamic>();
+      _user = AppUser.fromJson(userJson);
+      _offlineMode = true;
+      _checking = false;
+      notifyListeners();
+      return;
+    }
     if (BackendClient.instance.hasToken) {
       try {
         final me = await _repo.me();
@@ -66,4 +76,27 @@ class AuthProvider extends ChangeNotifier {
     _offlineMode = false;
     notifyListeners();
   }
+
+  Future<bool> isPasswordLoginEnabled() =>
+      _repo.isPasswordLoginEnabled();
+
+  /// Turn password login on/off from Settings.
+  /// Turning it off logs straight back in as principal.
+  Future<void> setPasswordLoginEnabled(bool enabled) async {
+    await _repo.setPasswordLoginEnabled(enabled);
+    if (!enabled) {
+      final res = await _repo.autoLogin();
+      final userJson = (res['user'] as Map).cast<String, dynamic>();
+      _user = AppUser.fromJson(userJson);
+      _offlineMode = true;
+    } else {
+      _user = null;
+      _offlineMode = false;
+      await BackendClient.instance.clearToken();
+    }
+    notifyListeners();
+  }
+
+  Future<void> changePassword(String username, String newPassword) =>
+      _repo.changePassword(username, newPassword);
 }

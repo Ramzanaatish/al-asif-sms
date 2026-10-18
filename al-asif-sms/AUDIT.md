@@ -20,3 +20,9 @@ collect overpay/negative amount.
 - Annual result with no session_id sums marks across all sessions' annual terms.
 - Default SECRET_KEY, CORS *, default password alasif123, seed session 2025-26 expired.
 - LocalDb.insert uses ConflictAlgorithm.replace: unique-index collision silently deletes the old row.
+
+## Round 2 (static review, Flutter SDK not available — NOT compiled)
+Fixed: async-gap `context` use without `mounted` (mark attendance, marks entry, promote, leave decide), logout using disposed drawer context,
+empty-menu crash in HomeShell, deprecated `withOpacity` -> `withValues(alpha:)`, Row text overflow (leave list, analytics, admission ID card,
+student documents, promote/batch headers), scaffold background + floating snackbar theme.
+Open: annual result screen parses "2025-26" into session id 2025 (year != DB id) and repository ignores sessionId anyway.

@@ -21,6 +21,11 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final menu = menuForRole(auth.role ?? '');
+    if (menu.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text('No screens available for this role.')),
+      );
+    }
     if (_index >= menu.length) _index = 0;
     final entry = menu[_index];
 
@@ -89,7 +94,7 @@ class _HomeShellState extends State<HomeShell> {
                                 ? AppColors.navy
                                 : Colors.black87)),
                     selected: selected,
-                    selectedTileColor: AppColors.goldLight.withOpacity(0.5),
+                    selectedTileColor: AppColors.goldLight.withValues(alpha: 0.5),
                     onTap: () {
                       setState(() => _index = i);
                       Navigator.pop(context);
@@ -103,8 +108,9 @@ class _HomeShellState extends State<HomeShell> {
               leading: const Icon(Icons.logout, color: AppColors.danger),
               title: const Text('Log Out'),
               onTap: () async {
+                final authProvider = context.read<AuthProvider>();
                 Navigator.pop(context);
-                await context.read<AuthProvider>().logout();
+                await authProvider.logout();
               },
             ),
           ],

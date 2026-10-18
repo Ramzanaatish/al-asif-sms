@@ -125,17 +125,17 @@ class _AdmissionScreenState extends State<AdmissionScreen> {
                     builder: (ctx, snap) => Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.navy.withOpacity(0.06),
+                        color: AppColors.navy.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: AppColors.navy.withOpacity(0.25)),
+                            color: AppColors.navy.withValues(alpha: 0.25)),
                       ),
                       child: Row(
                         children: [
                           const Icon(Icons.badge_outlined,
                               color: AppColors.navy, size: 20),
                           const SizedBox(width: 10),
-                          Column(
+                          Expanded(child: Column(
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
@@ -151,7 +151,7 @@ class _AdmissionScreenState extends State<AdmissionScreen> {
                                     color: AppColors.navy),
                               ),
                             ],
-                          ),
+                          )),
                         ],
                       ),
                     ),

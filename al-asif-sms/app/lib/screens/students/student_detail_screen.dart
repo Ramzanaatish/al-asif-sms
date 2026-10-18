@@ -108,10 +108,122 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     }
   }
 
+  Future<void> _editStudent() async {
+    final s = _student;
+    if (s == null) return;
+    final nameCtrl = TextEditingController(text: s.name);
+    final rollCtrl =
+        TextEditingController(text: s.rollNumber?.toString() ?? '');
+    final dobCtrl = TextEditingController(text: s.dob ?? '');
+    final guardianCtrl = TextEditingController(text: s.guardianName);
+    final phoneCtrl = TextEditingController(text: s.guardianPhone);
+    final relationCtrl = TextEditingController(text: s.guardianRelation);
+    final addressCtrl = TextEditingController(text: s.address);
+    String gender = s.gender;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Edit Student'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                  controller: nameCtrl,
+                  decoration: fieldDecoration('Full name *')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: rollCtrl,
+                  decoration: fieldDecoration('Roll number'),
+                  keyboardType: TextInputType.number),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: dobCtrl,
+                  decoration:
+                      fieldDecoration('Date of birth (YYYY-MM-DD)')),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: ['Male', 'Female'].contains(gender) ? gender : null,
+                decoration: fieldDecoration('Gender'),
+                items: const ['Male', 'Female']
+                    .map((g) =>
+                        DropdownMenuItem(value: g, child: Text(g)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) gender = v;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: guardianCtrl,
+                  decoration: fieldDecoration('Father/Guardian name')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: phoneCtrl,
+                  decoration: fieldDecoration('Guardian phone'),
+                  keyboardType: TextInputType.phone),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: relationCtrl,
+                  decoration: fieldDecoration('Relation (e.g. Father)')),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: addressCtrl,
+                  decoration: fieldDecoration('Address'),
+                  maxLines: 2),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (nameCtrl.text.trim().isEmpty) {
+      showSnack(context, 'Name is required.', error: true);
+      return;
+    }
+    try {
+      await context.read<StudentProvider>().updateStudent(widget.id, {
+        'name': nameCtrl.text.trim(),
+        'roll_number': rollCtrl.text.trim().isEmpty
+            ? null
+            : int.tryParse(rollCtrl.text.trim()),
+        'dob': dobCtrl.text.trim().isEmpty ? null : dobCtrl.text.trim(),
+        'gender': gender,
+        'guardian_name': guardianCtrl.text.trim(),
+        'guardian_phone': phoneCtrl.text.trim(),
+        'guardian_relation': relationCtrl.text.trim(),
+        'address': addressCtrl.text.trim(),
+      });
+      if (!mounted) return;
+      showSnack(context, 'Student updated.');
+      _load();
+    } catch (e) {
+      if (mounted) showSnack(context, e.toString(), error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const SchoolAppBar(title: 'Student Detail'),
+      appBar: SchoolAppBar(
+        title: 'Student Detail',
+        actions: [
+          if (!widget.readOnly && _student != null)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit student',
+              onPressed: _editStudent,
+            ),
+        ],
+      ),
       body: _loading
           ? const LoadingView()
           : _error != null
@@ -187,7 +299,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                           : AppColors.danger,
                       size: 18),
                   const SizedBox(width: 8),
-                  Text(d.name),
+                  Expanded(child: Text(d.name)),
                 ],
               )),
         ]),
