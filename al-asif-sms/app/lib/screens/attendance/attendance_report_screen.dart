@@ -185,21 +185,21 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                 ),
               ],
             ),
-            if (_classId != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Class Incharge: ${AppConfig.classTeacher(classes.firstWhere((c) => c.id == _classId, orElse: () => classes.first).name)}',
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.navy),
-                  ),
+          ),
+          if (_classId != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Class Incharge: ${AppConfig.classTeacher(classes.firstWhere((c) => c.id == _classId, orElse: () => classes.first).name)}',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.navy),
                 ),
               ),
-          ),
+            ),
           Expanded(
             child: Consumer<AttendanceProvider>(
               builder: (_, p, __) {
