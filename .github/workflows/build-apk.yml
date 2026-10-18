@@ -23,6 +23,23 @@ jobs:
         with:
           channel: stable
           flutter-version: 3.47.7
+          cache: true
+
+      - name: Cache Pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-v2-${{ runner.os }}-${{ hashFiles('al-asif-sms/app/pubspec.yaml') }}
+          restore-keys: pub-v2-${{ runner.os }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-v2-${{ runner.os }}-${{ hashFiles('al-asif-sms/app/android/gradle/wrapper/gradle-wrapper.properties', 'al-asif-sms/app/android/settings.gradle') }}
+          restore-keys: gradle-v2-${{ runner.os }}-
 
       - name: Install dependencies
         working-directory: al-asif-sms/app
@@ -30,7 +47,7 @@ jobs:
 
       - name: Analyze
         working-directory: al-asif-sms/app
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings --no-fatal-warnings
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         working-directory: al-asif-sms/app
