@@ -13,18 +13,14 @@ import 'providers/expenses_provider.dart';
 import 'providers/fees_provider.dart';
 import 'providers/staff_provider.dart';
 import 'providers/student_provider.dart';
-import 'screens/home_shell.dart';
-import 'screens/login_screen.dart';
-import 'screens/splash_screen.dart';
-import 'services/backend_client.dart';
+import 'screens/boot_screen.dart';
 import 'services/sync_service.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await BackendClient.instance.init();
-  // Open the local database (seeds first-run data) and start the sync engine
-  // before the UI boots, so every screen works offline from the first frame.
-  await SyncService.instance.init();
+  // Boot the UI immediately. Heavy init (database, backup, sync engine) runs
+  // inside BootScreen with visible progress, so it can never white-screen
+  // the app again.
   runApp(const AlAsifApp());
 }
 
@@ -75,13 +71,7 @@ class AlAsifApp extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
         ),
-        home: Consumer<AuthProvider>(
-          builder: (_, auth, __) {
-            if (auth.isChecking) return const SplashScreen();
-            if (auth.isLoggedIn) return const HomeShell();
-            return const LoginScreen();
-          },
-        ),
+        home: const BootScreen(),
       ),
     );
   }
