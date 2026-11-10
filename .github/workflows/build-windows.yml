@@ -42,6 +42,19 @@ jobs:
         working-directory: al-asif-sms/app
         run: flutter build windows --release
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Windows installer
+        working-directory: al-asif-sms/app
+        run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" windows/installer.iss'
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: alasif-windows-installer
+          path: al-asif-sms/app/installer-output/*.exe
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:

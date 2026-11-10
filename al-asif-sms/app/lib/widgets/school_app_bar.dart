@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 
 /// App bar with the school logo and a navy/gold branded look.
+/// Shows the school name above the screen title, so every screen carries
+/// the brand — the same header the HTML app uses.
 class SchoolAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
@@ -16,31 +18,64 @@ class SchoolAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(60);
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      toolbarHeight: 60,
       backgroundColor: AppColors.navy,
       foregroundColor: Colors.white,
       title: Row(
         children: [
           if (showLogo)
             Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Image.asset(
-                'assets/logo.png',
-                height: 36,
-                width: 36,
-                errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.school, color: AppColors.gold),
+              padding: const EdgeInsets.only(right: 12),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                padding: const EdgeInsets.all(2),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.school,
+                      color: AppColors.gold,
+                      size: 26,
+                    ),
+                  ),
+                ),
               ),
             ),
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  AppConfig.schoolShortName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.75),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
