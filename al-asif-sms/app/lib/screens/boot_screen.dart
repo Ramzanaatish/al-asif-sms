@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../providers/auth_provider.dart';
 import '../services/backend_client.dart';
+import '../services/license_service.dart';
 import '../services/sync_service.dart';
 import 'home_shell.dart';
+import 'license_screen.dart';
 import 'login_screen.dart';
 
 /// First screen: boots local services (database, backup, sync engine) with
@@ -40,6 +42,9 @@ class _BootScreenState extends State<BootScreen> {
       if (!mounted) return;
       setState(() => _status = 'Opening local database...');
       await SyncService.instance.init().timeout(const Duration(seconds: 60));
+      if (!mounted) return;
+      setState(() => _status = 'Checking license...');
+      await LicenseService.instance.load();
     } on TimeoutException {
       if (!mounted) return;
       setState(() =>
@@ -51,6 +56,13 @@ class _BootScreenState extends State<BootScreen> {
       return;
     }
     if (!mounted) return;
+    if (LicenseService.isLicenseEnforced &&
+        !LicenseService.instance.isLicensed) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LicenseScreen()),
+      );
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const AuthGate()),
     );

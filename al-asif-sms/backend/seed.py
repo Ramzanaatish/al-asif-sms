@@ -48,15 +48,25 @@ def main():
                     db.add(Subject(class_id=c.id, name=sname))
             else:
                 c.student_count = count
-        # users (default password: alasif123 — change after first login)
-        # Only principal + teacher. No parents/admin/accounts.
+        # users (principal password: alasif123 — change after first login;
+        # teacher passwords: teacher123 — change after first login).
+        # Principal + one login per class teacher (usernames are name slugs).
         users = [
-            ("principal", "Mrs. Hajra Iqbal", "principal"),
-            ("teacher", "Teacher", "teacher"),
+            ("principal", "Mrs. Hajra Iqbal", "principal", "alasif123"),
+            ("teacher", "Teacher", "teacher", "alasif123"),
+            ("miss-asia", "Miss Asia", "teacher", "teacher123"),
+            ("miss-nadia-ali", "Miss Nadia Ali", "teacher", "teacher123"),
+            ("mrs-mehwish-sharif", "Mrs. Mehwish Sharif", "teacher", "teacher123"),
+            ("miss-shakila", "Miss Shakila", "teacher", "teacher123"),
+            ("miss-uzma", "Miss Uzma", "teacher", "teacher123"),
+            ("miss-nadia-jamil", "Miss Nadia Jamil", "teacher", "teacher123"),
+            ("miss-akeela", "Miss Akeela", "teacher", "teacher123"),
+            ("miss-zunaira", "Miss Zunaira", "teacher", "teacher123"),
+            ("mrs-saima-iqbal", "Mrs. Saima Iqbal", "teacher", "teacher123"),
         ]
-        for uname, fname, role in users:
+        for uname, fname, role, pw in users:
             if not db.query(User).filter(User.username == uname).first():
-                db.add(User(username=uname, password_hash=hash_password("alasif123"),
+                db.add(User(username=uname, password_hash=hash_password(pw),
                             full_name=fname, role=role))
         # fee heads
         heads = [("Tuition Fee", 800, "monthly"), ("Admission Fee", 2000, "onetime"),
@@ -339,7 +349,7 @@ def main():
                                        class_id=cls.id, status="active"))
         db.commit()
         print("Seed complete.")
-        print("Logins (password alasif123): principal / teacher")
+        print("Logins: principal / alasif123; teachers / teacher123 (miss-asia, miss-nadia-ali, mrs-mehwish-sharif, miss-shakila, miss-uzma, miss-nadia-jamil, miss-akeela, miss-zunaira, mrs-saima-iqbal)")
     finally:
         db.close()
 

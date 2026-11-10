@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../navigation.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/license_banner.dart';
 import '../widgets/school_app_bar.dart';
 import '../widgets/sync_widgets.dart';
 
@@ -119,6 +120,7 @@ class _HomeShellState extends State<HomeShell> {
       body: Column(
         children: [
           const OfflineBanner(),
+          const LicenseBanner(),
           Expanded(child: entry.builder()),
         ],
       ),

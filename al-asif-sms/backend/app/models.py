@@ -75,6 +75,13 @@ class Student(Base):
     guardian_name = Column(String(128), nullable=True)
     guardian_phone = Column(String(32), nullable=True)
     guardian_relation = Column(String(32), nullable=True)
+    # Extra fields the HTML software + APK sync needs (all optional).
+    b_form = Column(String(16), nullable=True)
+    name_urdu = Column(String(128), nullable=True)
+    father_urdu = Column(String(128), nullable=True)
+    mother_name = Column(String(128), nullable=True)
+    mother_name_urdu = Column(String(128), nullable=True)
+    group_name = Column(String(32), nullable=True)
     address = Column(Text, nullable=True)
     photo_path = Column(String(255), nullable=True)
     documents = Column(JSON, default=list)  # [{name, received}]

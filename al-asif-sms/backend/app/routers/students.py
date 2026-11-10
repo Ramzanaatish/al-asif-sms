@@ -20,6 +20,9 @@ def _out(s: Student) -> dict:
             "section_id": s.section_id,
             "section_name": s.section.name if s.section else "",
             "guardian_name": s.guardian_name, "guardian_phone": s.guardian_phone,
+            "b_form": s.b_form, "name_urdu": s.name_urdu,
+            "father_urdu": s.father_urdu, "mother_name": s.mother_name,
+            "mother_name_urdu": s.mother_name_urdu, "group_name": s.group_name,
             "status": s.status}
 
 

@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+
+import 'db_factory.dart';
 
 /// Offline-first local database for the Al-Asif School Management app.
 ///
@@ -29,7 +33,36 @@ class LocalDb {
   /// Schema version, written into backup metadata and checked on restore.
   static int get schemaVersion => _version;
 
+  /// Ordered schema migrations, keyed by the version they produce.
+  ///
+  /// When [_version] is raised, [openDatabase] runs [onUpgrade], which
+  /// first copies the database file aside and then applies every step from
+  /// the old version up to the new one, in order. A migration must only
+  /// ADD things (tables, columns, indexes) or copy data into a new shape —
+  /// it must never drop a table or delete rows, so an app update can never
+  /// lose the school's data.
+  ///
+  /// To ship a schema change: add its statements under the new version
+  /// number, raise [_version], and add a test in
+  /// test/local_db_upgrade_test.dart that opens a database at the old
+  /// version, inserts rows, reopens it, and checks the rows are still there.
+  static const Map<int, List<String>> _migrations = {
+    // Version 1 is the original schema (created by onCreate below).
+    // Version 2 entries go here when the first schema change ships.
+  };
+
   Database? _db;
+
+  // Test-only override for the databases directory, so flutter test can
+  // point the database at a temp folder instead of the app's data folder.
+  // Never set in the app.
+  static String? _testDatabasesDir;
+
+  @visibleForTesting
+  static set testDatabasesDir(String? dir) => _testDatabasesDir = dir;
+
+  Future<String> _databasesDir() async =>
+      _testDatabasesDir ?? await getDatabasesPath();
 
   Future<Database>? _opening;
 
@@ -56,7 +89,7 @@ class LocalDb {
 
   /// Absolute path of the database file.
   Future<String> dbPath() async {
-    final dir = await getDatabasesPath();
+    final dir = await _databasesDir();
     return p.join(dir, _dbName);
   }
 
@@ -66,6 +99,63 @@ class LocalDb {
     final d = _db;
     _db = null;
     await d?.close();
+  }
+
+  /// Names of every table included in a CSV backup: all entity tables plus
+  /// the audit log. The sync queue (transient) and meta (device-specific
+  /// keys like the backup folder) are deliberately left out.
+  static List<String> get csvBackupTables => [..._tables.keys, 'audit_log'];
+
+  /// All rows of one table, ordered by id, as column-name maps.
+  /// Used by the CSV backup export.
+  Future<List<Map<String, Object?>>> exportTable(String table) async {
+    final d = await db;
+    return d.query(table, orderBy: 'id');
+  }
+
+  /// Column names of one table, in table order, from PRAGMA table_info.
+  Future<List<String>> tableColumns(String table) async {
+    final d = await db;
+    final info = await d.rawQuery('PRAGMA table_info($table)');
+    return [for (final row in info) row['name'] as String];
+  }
+
+  /// Declared column types of one table (for example INTEGER or TEXT),
+  /// keyed by column name. Used by the CSV backup import to restore
+  /// numbers as numbers (a CSV file itself carries only text).
+  Future<Map<String, String>> tableColumnTypes(String table) async {
+    final d = await db;
+    final info = await d.rawQuery('PRAGMA table_info($table)');
+    return {
+      for (final row in info)
+        (row['name'] as String): ((row['type'] as String?) ?? '').toUpperCase(),
+    };
+  }
+
+  /// Replace one table's rows with the given rows (import side of a CSV
+  /// backup). Runs in a transaction: the old rows are deleted first, then
+  /// every row is inserted with its original id, and the autoincrement
+  /// counter is reset so the next new row continues after the highest id.
+  /// The caller must have validated the table name and columns first.
+  Future<void> importTable(
+    String table,
+    List<String> columns,
+    List<Map<String, Object?>> rows,
+  ) async {
+    final d = await db;
+    await d.transaction((txn) async {
+      await txn.delete(table);
+      for (final row in rows) {
+        await txn.insert(table, row);
+      }
+      try {
+        await txn.rawDelete(
+            'DELETE FROM sqlite_sequence WHERE name = ?', [table]);
+      } catch (_) {
+        // sqlite_sequence only exists for AUTOINCREMENT tables; a missing
+        // one just means the counter needs no reset.
+      }
+    });
   }
 
   // ---------------------------------------------------------------- schema
@@ -125,7 +215,8 @@ class LocalDb {
       'updated_at TEXT NOT NULL';
 
   Future<Database> _open() async {
-    final dir = await getDatabasesPath();
+    initDatabaseFactory();
+    final dir = await _databasesDir();
     final path = p.join(dir, _dbName);
     final database = await openDatabase(
       path,
@@ -150,10 +241,36 @@ class LocalDb {
         await db.execute(
             'CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, action TEXT NOT NULL, entity TEXT, entity_id INTEGER, details TEXT, created_at TEXT NOT NULL)');
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await _backupBeforeMigration(db, oldVersion);
+        for (var v = oldVersion + 1; v <= newVersion; v++) {
+          final steps = _migrations[v];
+          if (steps == null) continue;
+          for (final sql in steps) {
+            await db.execute(sql);
+          }
+        }
+      },
     );
     await _maybeSeed(database);
     await _migrateLegacyQueue(database);
     return database;
+  }
+
+  /// Copy the database file aside before a schema migration runs, so a
+  /// failed or interrupted upgrade can always be recovered by hand. The
+  /// copy sits next to the live file and is never deleted by the app.
+  Future<void> _backupBeforeMigration(Database db, int oldVersion) async {
+    try {
+      await db.rawQuery('PRAGMA wal_checkpoint(TRUNCATE)');
+      final file = File(db.path);
+      if (!await file.exists()) return;
+      final backup = File('${db.path}.bak-v$oldVersion');
+      if (await backup.exists()) return;
+      await file.copy(backup.path);
+    } catch (_) {
+      // A backup copy must never block the migration itself.
+    }
   }
 
   // ------------------------------------------------------------- seeding

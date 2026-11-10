@@ -4,9 +4,13 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../providers/auth_provider.dart';
 import '../services/backup_service.dart';
+import '../services/csv_backup_service.dart';
+import '../services/license_service.dart';
+import '../services/update_service.dart';
 import '../widgets/school_app_bar.dart';
 import '../widgets/ui_helpers.dart';
 import 'home_shell.dart';
+import 'license_screen.dart';
 
 /// Settings: manual backup, backup import/restore.
 ///
@@ -21,7 +25,13 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
+  bool _checkingUpdate = false;
   bool? _pwLoginEnabled;
+  String? _currentVersion;
+  String? _updateMessage;
+  String? _csvMessage;
+  LicenseStatus? _licenseStatus;
+  String? _deviceId;
 
   BackupService get _backups => BackupService.instance;
 
@@ -31,7 +41,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _backups.refreshStatus();
       _loadPwSetting();
+      _loadVersion();
+      _loadLicense();
     });
+  }
+
+  Future<void> _loadLicense() async {
+    final id = await LicenseService.instance.getDeviceId();
+    await LicenseService.instance.load();
+    if (mounted) {
+      setState(() {
+        _licenseStatus = LicenseService.instance.status;
+        _deviceId = id;
+      });
+    }
+  }
+
+  String _licenseStatusText() {
+    final s = _licenseStatus;
+    if (s == null) return 'Loading...';
+    if (!s.licensed) return 'Not activated';
+    final days = s.daysLeft;
+    if (days != null && days <= LicenseService.warningDays) {
+      return 'Active — expiring soon ($days din reh gaye)';
+    }
+    return 'Active';
+  }
+
+  Future<void> _openLicense() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LicenseScreen(fromSettings: true),
+      ),
+    );
+    await _loadLicense();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final v = await UpdateService.instance.currentVersion();
+      if (mounted) setState(() => _currentVersion = v);
+    } catch (_) {
+      // Version label is informational; never block Settings on it.
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    setState(() => _checkingUpdate = true);
+    try {
+      final info = await UpdateService.instance.checkForUpdate();
+      if (!mounted) return;
+      if (info == null) {
+        setState(() => _updateMessage =
+            'Could not reach GitHub. Check the internet and try again.');
+        return;
+      }
+      if (info.updateAvailable) {
+        setState(() => _updateMessage =
+            'New version ${info.latestVersion} is available '
+            '(you have ${info.currentVersion}). Download it from the '
+            'release page and install it over this version — your data stays.');
+      } else {
+        setState(() => _updateMessage =
+            'You are on the latest version (${info.currentVersion}).');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _updateMessage = 'Update check failed: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
   }
 
   Future<void> _loadPwSetting() async {
@@ -139,6 +219,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _exportCsv() async {
+    setState(() => _busy = true);
+    try {
+      final path = await CsvBackupService.instance.exportCsvBackup();
+      if (!mounted) return;
+      if (path == null) return; // user cancelled
+      setState(() => _csvMessage = 'CSV backup saved.');
+      debugPrint('CSV backup: $path');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _csvMessage = 'CSV export failed: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importCsv() async {
+    setState(() => _busy = true);
+    try {
+      final path = await CsvBackupService.instance.pickCsvBackupFile();
+      if (!mounted) return;
+      if (path == null) return; // user cancelled
+      final summary =
+          await CsvBackupService.instance.validateCsvBackup(path);
+      if (!mounted) return;
+      final confirmed = await _confirmCsvImport(summary);
+      if (confirmed != true || !mounted) return;
+      setState(() => _busy = true);
+      final done =
+          await CsvBackupService.instance.importCsvBackupFile(path);
+      if (!mounted) return;
+      setState(() => _csvMessage = 'CSV backup imported: $done');
+      showSnack(context, 'CSV backup imported: $done');
+      // Rebuild the shell so every screen reloads from the imported data.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeShell()),
+        (_) => false,
+      );
+    } on CsvBackupException catch (e) {
+      if (mounted) setState(() => _csvMessage = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _csvMessage = 'CSV import failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<bool?> _confirmCsvImport(CsvBackupSummary summary) {
+    return showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Import CSV backup?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Tables: ${summary.tableCount} · Rows: ${summary.rowCount}'),
+            const SizedBox(height: 12),
+            const Text(
+              'All current data in these tables will be replaced by the CSV file. This cannot be undone.',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger),
+              child: const Text('Import')),
+        ],
+      ),
+    );
+  }
+
   Future<bool?> _confirmRestore(BackupInfo info) {
     return showDialog<bool>(
       context: context,
@@ -194,6 +354,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              const _SectionTitle('License'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!LicenseService.isLicenseEnforced) ...[
+                        const Text(
+                          'Is software (Windows) ke liye license key ki '
+                          'zaroorat nahi hai — license sirf mobile app '
+                          '(APK) mein lagti hai.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ] else ...[
+                        _InfoRow('Status', _licenseStatusText()),
+                        _InfoRow('Key', _licenseStatus?.maskedKey ?? '-'),
+                        _InfoRow('Device ID', _deviceId ?? 'Loading...'),
+                        if (_licenseStatus?.licensed == true) ...[
+                          _InfoRow(
+                            'Expiry',
+                            _licenseStatus!.expiryDate == null
+                                ? '-'
+                                : _fmtDate(_licenseStatus!.expiryDate!),
+                          ),
+                          _InfoRow(
+                            'Days left',
+                            '${_licenseStatus!.daysLeft ?? '-'}',
+                          ),
+                          _InfoRow(
+                            'Device-locked',
+                            _licenseStatus!.deviceLocked ? 'Yes' : 'No',
+                          ),
+                        ],
+                        if (_licenseStatus != null &&
+                            !_licenseStatus!.licensed &&
+                            _licenseStatus!.message != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _licenseStatus!.message!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _openLicense,
+                          icon: const Icon(Icons.key_outlined),
+                          label: Text(
+                            _licenseStatus?.licensed == true
+                                ? 'Change key'
+                                : 'Enter license key',
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               const _SectionTitle('Login & Password'),
               Card(
                 child: Column(
@@ -263,9 +486,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'A backup file (.alasif) can be copied to another phone and '
-                'imported there to move the full database.',
+                'A backup file (.alasif) can be copied to another phone or '
+                'to the Windows app and imported there to move the full database.',
                 style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 24),
+              const _SectionTitle('CSV backup'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'The whole database as CSV files (one file per table) inside a zip. Unzip it to open any table in Excel.',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      if (_csvMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_csvMessage!,
+                            style: const TextStyle(fontSize: 13)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: running ? null : _exportCsv,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Export CSV backup'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: running ? null : _importCsv,
+                icon: const Icon(Icons.upload_outlined),
+                label: const Text('Import CSV backup'),
+              ),
+              const SizedBox(height: 24),
+              const _SectionTitle('App & Updates'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _InfoRow('Version', _currentVersion ?? '-'),
+                      if (_updateMessage != null) ...[
+                        const SizedBox(height: 8),
+                        Text(_updateMessage!,
+                            style: const TextStyle(fontSize: 13)),
+                      ],
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Installing a new version over the old one keeps all '
+                        'data: the database lives outside the app folder.',
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: (_busy || _checkingUpdate)
+                    ? null
+                    : _checkForUpdate,
+                icon: const Icon(Icons.system_update_outlined),
+                label: const Text('Check for updates'),
               ),
             ],
           );
@@ -321,4 +610,12 @@ class _InfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _fmtDate(DateTime date) {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December',
+  ];
+  return '${date.day} ${months[date.month - 1]} ${date.year}';
 }

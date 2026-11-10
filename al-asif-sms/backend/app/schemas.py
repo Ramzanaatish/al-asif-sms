@@ -46,6 +46,12 @@ class StudentIn(BaseModel):
     guardian_name: str | None = None
     guardian_phone: str | None = None
     guardian_relation: str | None = None
+    b_form: str | None = None
+    name_urdu: str | None = None
+    father_urdu: str | None = None
+    mother_name: str | None = None
+    mother_name_urdu: str | None = None
+    group_name: str | None = None
     address: str | None = None
     photo_path: str | None = None
     documents: list[DocumentItem] = []
@@ -62,6 +68,12 @@ class StudentOut(BaseModel):
     section_name: str = ""
     guardian_name: str | None = None
     guardian_phone: str | None = None
+    b_form: str | None = None
+    name_urdu: str | None = None
+    father_urdu: str | None = None
+    mother_name: str | None = None
+    mother_name_urdu: str | None = None
+    group_name: str | None = None
     status: str
 
     class Config:

@@ -14,10 +14,14 @@ import 'providers/fees_provider.dart';
 import 'providers/staff_provider.dart';
 import 'providers/student_provider.dart';
 import 'screens/boot_screen.dart';
+import 'services/db_factory.dart';
 import 'services/sync_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Desktop (Windows/macOS/Linux) runs SQLite over FFI; Android/iOS keep
+  // the platform implementation. Must run before any database use.
+  initDatabaseFactory();
   // Boot the UI immediately. Heavy init (database, backup, sync engine) runs
   // inside BootScreen with visible progress, so it can never white-screen
   // the app again.
