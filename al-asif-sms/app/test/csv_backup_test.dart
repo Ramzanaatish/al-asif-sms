@@ -6,6 +6,8 @@ import 'package:alasif_sms/services/db_factory.dart';
 import 'package:alasif_sms/services/local_db.dart';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'temp_dir_helper.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// Guards the CSV backup round-trip: export -> wipe the database -> import
@@ -69,7 +71,7 @@ void main() {
       await db.close();
     } finally {
       LocalDb.testDatabasesDir = null;
-      await tmp.delete(recursive: true);
+      await deleteTempDirQuietly(tmp);
     }
   });
 
@@ -95,7 +97,7 @@ void main() {
       await LocalDb.instance.close();
     } finally {
       LocalDb.testDatabasesDir = null;
-      await tmp.delete(recursive: true);
+      await deleteTempDirQuietly(tmp);
     }
   });
 }

@@ -6,6 +6,8 @@ import 'package:alasif_sms/services/local_db.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'temp_dir_helper.dart';
+
 /// Guards the update promise: closing the app and reopening it (the way an
 /// app update does) must keep every row, and the first-run seed must not
 /// duplicate itself.
@@ -77,7 +79,7 @@ void main() {
       await db.close();
     } finally {
       LocalDb.testDatabasesDir = null;
-      await tmp.delete(recursive: true);
+      await deleteTempDirQuietly(tmp);
     }
   });
 }
