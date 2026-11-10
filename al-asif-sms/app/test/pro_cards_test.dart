@@ -66,4 +66,16 @@ void main() {
     );
     expect(find.text('4'), findsOneWidget);
   });
+
+  test('grid columns follow the grid width, not the screen width', () {
+    // Pinned sidebar (260px) eats part of the window: a 1180px window
+    // leaves ~920px for the grid, which fits 3 stat columns, not 4 —
+    // 4 would truncate values like "Rs 145,200" with an ellipsis.
+    expect(statColumnsForWidth(1200), 4);
+    expect(statColumnsForWidth(920), 3);
+    expect(statColumnsForWidth(700), 3);
+    expect(statColumnsForWidth(400), 2);
+    expect(tileColumnsForWidth(900), 2);
+    expect(tileColumnsForWidth(700), 1);
+  });
 }

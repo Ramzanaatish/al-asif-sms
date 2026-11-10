@@ -8,7 +8,6 @@ import '../../widgets/loading_view.dart';
 import '../../widgets/ui_helpers.dart';
 import 'add_staff_screen.dart';
 import 'leave_list_screen.dart';
-import 'salary_screen.dart';
 import 'staff_detail_screen.dart';
 
 /// Tab screen (inside HomeShell) — no app bar of its own.
@@ -46,17 +45,6 @@ class _StaffListScreenState extends State<StaffListScreen> {
                   builder: (_) => const LeaveListScreen()),
             ).then((_) => _reload()),
             child: const Icon(Icons.event_busy),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.small(
-            heroTag: 'salaries',
-            tooltip: 'Salaries',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const SalaryScreen(embedded: false)),
-            ),
-            child: const Icon(Icons.payments),
           ),
           const SizedBox(height: 8),
           FloatingActionButton(

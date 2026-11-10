@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'screens/academics/academics_home_screen.dart';
 import 'screens/attendance/attendance_home_screen.dart';
-import 'screens/attendance/mark_attendance_screen.dart';
-import 'screens/audit_log_screen.dart';
-import 'screens/comms/complaints_screen.dart';
-import 'screens/comms/notices_screen.dart';
-import 'screens/comms/parent_home_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/exams/exams_home_screen.dart';
 import 'screens/expenses/expense_list_screen.dart';
-import 'screens/expenses/profit_loss_screen.dart';
 import 'screens/fees/fees_home_screen.dart';
 import 'screens/reports_home_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/staff/salary_screen.dart';
 import 'screens/staff/staff_list_screen.dart';
 import 'screens/students/student_list_screen.dart';
 
@@ -26,103 +18,64 @@ class MenuEntry {
   const MenuEntry(this.title, this.icon, this.builder);
 }
 
-/// Role -> visible screens. Every role sees only its own screens.
+/// Role -> visible screens. The menu matches the final HTML (Complete v7)
+/// exactly: Dashboard, Students, Staff, Fees, Exams, Attendance, Expenses,
+/// Reports, Settings — nothing else. Profit & Loss lives inside Reports
+/// (as a tile), not as its own menu entry; attendance marking lives inside
+/// the Attendance screen, not as a separate entry. There is no Academics,
+/// Notices, Complaints, Audit Log, Salaries or parent menu: none of those
+/// exist in the HTML.
 List<MenuEntry> menuForRole(String role) {
+  final dashboard = MenuEntry('Dashboard', Icons.dashboard,
+      () => const PrincipalDashboardScreen());
+  final students = MenuEntry('Students', Icons.people,
+      () => const StudentListScreen());
+  final staff = MenuEntry('Staff', Icons.badge,
+      () => const StaffListScreen());
+  final fees = MenuEntry('Fees', Icons.receipt_long,
+      () => const FeesHomeScreen());
+  final exams = MenuEntry('Exams', Icons.assignment,
+      () => const ExamsHomeScreen());
+  final attendance = MenuEntry('Attendance', Icons.fact_check,
+      () => const AttendanceHomeScreen());
+  final expenses = MenuEntry('Expenses', Icons.money_off,
+      () => const ExpenseListScreen());
+  final reports = MenuEntry('Reports', Icons.bar_chart,
+      () => const ReportsHomeScreen());
+  final settings = MenuEntry('Settings', Icons.settings,
+      () => const SettingsScreen());
+
   switch (role) {
     case 'principal':
-      return [
-        MenuEntry('Dashboard', Icons.dashboard,
-            () => const PrincipalDashboardScreen()),
-        MenuEntry('Students', Icons.people,
-            () => const StudentListScreen()),
-        MenuEntry('Staff', Icons.badge, () => const StaffListScreen()),
-        MenuEntry(
-            'Academics', Icons.school, () => const AcademicsHomeScreen()),
-        MenuEntry('Attendance', Icons.fact_check,
-            () => const AttendanceHomeScreen()),
-        MenuEntry('Exams', Icons.assignment, () => const ExamsHomeScreen()),
-        MenuEntry(
-            'Fees', Icons.receipt_long, () => const FeesHomeScreen()),
-        MenuEntry('Expenses', Icons.money_off,
-            () => const ExpenseListScreen()),
-        MenuEntry('Profit & Loss', Icons.trending_up,
-            () => const ProfitLossScreen()),
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-        MenuEntry('Complaints', Icons.report_problem,
-            () => const ComplaintsScreen()),
-        MenuEntry(
-            'Reports', Icons.bar_chart, () => const ReportsHomeScreen()),
-        MenuEntry('Audit Log', Icons.history, () => const AuditLogScreen()),
-        MenuEntry('Settings', Icons.settings, () => const SettingsScreen()),
-      ];
     case 'administrator':
       return [
-        MenuEntry('Dashboard', Icons.dashboard,
-            () => const PrincipalDashboardScreen()),
-        MenuEntry('Students', Icons.people,
-            () => const StudentListScreen()),
-        MenuEntry('Staff', Icons.badge, () => const StaffListScreen()),
-        MenuEntry(
-            'Academics', Icons.school, () => const AcademicsHomeScreen()),
-        MenuEntry('Attendance', Icons.fact_check,
-            () => const AttendanceHomeScreen()),
-        MenuEntry('Exams', Icons.assignment, () => const ExamsHomeScreen()),
-        MenuEntry(
-            'Fees', Icons.receipt_long, () => const FeesHomeScreen()),
-        MenuEntry('Expenses', Icons.money_off,
-            () => const ExpenseListScreen()),
-        MenuEntry('Profit & Loss', Icons.trending_up,
-            () => const ProfitLossScreen()),
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-        MenuEntry('Complaints', Icons.report_problem,
-            () => const ComplaintsScreen()),
-        MenuEntry(
-            'Reports', Icons.bar_chart, () => const ReportsHomeScreen()),
-        MenuEntry('Settings', Icons.settings, () => const SettingsScreen()),
+        dashboard,
+        students,
+        staff,
+        fees,
+        exams,
+        attendance,
+        expenses,
+        reports,
+        settings,
       ];
     case 'teacher':
+      // Teacher hides Fees, Expenses, Staff and Settings (same as the HTML).
       return [
-        MenuEntry('Mark Attendance', Icons.fact_check,
-            () => const MarkAttendanceScreen()),
+        dashboard,
         MenuEntry('Students', Icons.people,
             () => const StudentListScreen(readOnly: true)),
-        MenuEntry(
-            'Academics', Icons.school, () => const AcademicsHomeScreen()),
-        MenuEntry('Exams', Icons.assignment, () => const ExamsHomeScreen()),
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-        MenuEntry('Complaints', Icons.report_problem,
-            () => const ComplaintsScreen()),
+        attendance,
+        exams,
+        reports,
       ];
     case 'accountant':
       return [
-        MenuEntry(
-            'Fees', Icons.receipt_long, () => const FeesHomeScreen()),
-        MenuEntry('Expenses', Icons.money_off,
-            () => const ExpenseListScreen()),
-        MenuEntry('Salaries', Icons.payments, () => const SalaryScreen()),
-        MenuEntry('Profit & Loss', Icons.trending_up,
-            () => const ProfitLossScreen()),
-        MenuEntry(
-            'Reports', Icons.bar_chart, () => const ReportsHomeScreen()),
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-      ];
-    case 'parent':
-      return [
-        MenuEntry('My Children', Icons.child_care,
-            () => const ParentHomeScreen()),
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-        MenuEntry('Complaints', Icons.report_problem,
-            () => const ComplaintsScreen()),
+        fees,
+        expenses,
+        reports,
       ];
     default:
-      return [
-        MenuEntry(
-            'Notices', Icons.campaign, () => const NoticesScreen()),
-      ];
+      return [];
   }
 }

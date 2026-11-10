@@ -17,6 +17,11 @@ class AuthRepository {
   final _db = LocalDb.instance;
 
   Future<Map<String, dynamic>> login(String username, String password) async {
+    // No server address saved in Settings: do not wait up to 25s on the
+    // unreachable default address — go straight to the offline login.
+    if (!BackendClient.instance.hasServerConfigured) {
+      return _offlineLogin(username, password);
+    }
     try {
       final res = await _c.post('/api/auth/login',
           body: {'username': username, 'password': password}, isLogin: true);
@@ -72,14 +77,23 @@ class AuthRepository {
 
   /// Profile for boot. Offline: returns the cached profile.
   Future<Map<String, dynamic>> me() async {
-    try {
-      final res = await _c.get('/api/auth/me');
-      return (res as Map).cast<String, dynamic>();
-    } on NetworkException {
-      final raw = await _db.getMeta('cached_user');
-      if (raw == null) rethrow;
-      return (jsonDecode(raw) as Map).cast<String, dynamic>();
+    if (BackendClient.instance.hasServerConfigured) {
+      try {
+        final res = await _c.get('/api/auth/me');
+        return (res as Map).cast<String, dynamic>();
+      } on NetworkException {
+        return _cachedProfileOrThrow();
+      }
     }
+    return _cachedProfileOrThrow();
+  }
+
+  Future<Map<String, dynamic>> _cachedProfileOrThrow() async {
+    final raw = await _db.getMeta('cached_user');
+    if (raw == null) {
+      throw NetworkException('No server configured and no saved login.');
+    }
+    return (jsonDecode(raw) as Map).cast<String, dynamic>();
   }
 
   Future<void> _cacheCredentials(String username, String password,

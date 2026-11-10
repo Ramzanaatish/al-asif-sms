@@ -9,9 +9,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// `sqflite` API runs on FFI instead. Every repository and [LocalDb] call
 /// stays exactly the same on both; only this factory differs.
 ///
-/// The database file itself always lives outside the install folder
-/// (`getDatabasesPath()`), so reinstalling or updating the app never touches
-/// it. Call [initDatabaseFactory] once at startup, before any database use.
+/// The database file lives in the per-user application support folder
+/// (see LocalDb._databasesDir), never inside the install folder, so
+/// reinstalling or updating the app never touches it. Call
+/// [initDatabaseFactory] once at startup, before any database use.
 bool _ffiReady = false;
 
 void initDatabaseFactory() {

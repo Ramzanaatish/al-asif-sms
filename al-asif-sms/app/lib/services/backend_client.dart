@@ -41,12 +41,20 @@ class BackendClient {
   String? _token;
   SharedPreferences? _prefs;
 
+  /// True once the user has saved a server address in Settings. The
+  /// compile-time default (http://10.0.2.2:8000, the Android emulator
+  /// address) is NOT a configured server: on Windows/desktop it is
+  /// unreachable, so auto-sync and login must never wait on it.
+  bool _hasServerConfigured = false;
+  bool get hasServerConfigured => _hasServerConfigured;
+
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
     _token = _prefs!.getString('jwt_token');
     final savedUrl = _prefs!.getString('api_base_url');
-    if (savedUrl != null && savedUrl.isNotEmpty) {
-      AppConfig.apiBaseUrl = savedUrl;
+    _hasServerConfigured = savedUrl != null && savedUrl.isNotEmpty;
+    if (_hasServerConfigured) {
+      AppConfig.apiBaseUrl = savedUrl!;
     }
   }
 
@@ -61,6 +69,7 @@ class BackendClient {
     }
     if (u.isEmpty) return;
     AppConfig.apiBaseUrl = u;
+    _hasServerConfigured = true;
     _prefs ??= await SharedPreferences.getInstance();
     await _prefs!.setString('api_base_url', u);
   }

@@ -6,7 +6,6 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/loading_view.dart';
 import '../../widgets/ui_helpers.dart';
 import 'add_expense_screen.dart';
-import 'profit_loss_screen.dart';
 
 /// Tab screen (inside HomeShell) — no app bar of its own.
 class ExpenseListScreen extends StatefulWidget {
@@ -37,31 +36,15 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
   Widget build(BuildContext context) {
     final cats = context.watch<ExpensesProvider>().categories;
     return Scaffold(
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton.small(
-            heroTag: 'pnl',
-            tooltip: 'Profit & Loss',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const ProfitLossScreen()),
-            ),
-            child: const Icon(Icons.trending_up),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'add',
-            tooltip: 'Add expense',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const AddExpenseScreen()),
-            ).then((_) => _reload()),
-            child: const Icon(Icons.add),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'add',
+        tooltip: 'Add expense',
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const AddExpenseScreen()),
+        ).then((_) => _reload()),
+        child: const Icon(Icons.add),
       ),
       body: Column(
         children: [

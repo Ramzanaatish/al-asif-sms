@@ -89,7 +89,11 @@ void main() {
       final zipPath = '${tmp.path}/bad.zip';
       await File(zipPath).writeAsBytes(ZipEncoder().encode(archive)!);
 
-      expect(
+      // expectLater (awaited): the import runs to completion BEFORE close()
+      // below. A plain un-awaited expect() would let the import race with
+      // close() and the finally that clears testDatabasesDir, so the import
+      // would reopen the database with no test dir set.
+      await expectLater(
         () => CsvBackupService.instance.importCsvBackupFile(zipPath),
         throwsA(isA<CsvBackupException>()),
       );

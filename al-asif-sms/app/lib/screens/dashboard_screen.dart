@@ -79,18 +79,21 @@ class _PrincipalDashboardScreenState extends State<PrincipalDashboardScreen> {
             ),
           ),
         ];
-        return RefreshIndicator(
-          onRefresh: () => p.load(),
-          child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: statColumns(context),
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              mainAxisExtent: 100,
+        return LayoutBuilder(
+          builder: (_, constraints) => RefreshIndicator(
+            onRefresh: () => p.load(),
+            child: GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount:
+                    statColumnsForWidth(constraints.maxWidth),
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                mainAxisExtent: 100,
+              ),
+              itemCount: cards.length,
+              itemBuilder: (_, i) => cards[i],
             ),
-            itemCount: cards.length,
-            itemBuilder: (_, i) => cards[i],
           ),
         );
       },

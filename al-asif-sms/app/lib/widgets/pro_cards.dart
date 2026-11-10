@@ -5,17 +5,27 @@ import 'package:flutter/material.dart';
 /// number across a giant square, which is why the screens looked empty.
 
 /// Columns for a stat grid at the current width: 4 on a wide desktop
-/// window, 3 on a narrow window, 2 on a phone.
-int statColumns(BuildContext context) {
-  final width = MediaQuery.sizeOf(context).width;
-  if (width >= 1100) return 4;
-  if (width >= 700) return 3;
+/// window, 3 on a narrow window, 2 on a phone. Takes the GRID width, not
+/// the screen width: on desktop the pinned sidebar (260px) eats part of
+/// the window, and 4 columns in the remaining space would truncate values
+/// like "Rs 145,200" with an ellipsis.
+int statColumnsForWidth(double width) {
+  if (width >= 980) return 4;
+  if (width >= 650) return 3;
   return 2;
 }
 
+/// Columns for a stat grid, from the screen width (no sidebar in play).
+int statColumns(BuildContext context) =>
+    statColumnsForWidth(MediaQuery.sizeOf(context).width);
+
 /// Columns for a menu-tile grid: 2 on a wide window, 1 on a phone.
+/// Takes the GRID width (see [statColumnsForWidth]).
+int tileColumnsForWidth(double width) => width >= 780 ? 2 : 1;
+
+/// Columns for a menu-tile grid, from the screen width (no sidebar in play).
 int tileColumns(BuildContext context) =>
-    MediaQuery.sizeOf(context).width >= 900 ? 2 : 1;
+    tileColumnsForWidth(MediaQuery.sizeOf(context).width);
 
 /// A compact stat card: tinted icon chip on the left, small grey label and
 /// a large bold value on the right. Fixed height comes from the grid's

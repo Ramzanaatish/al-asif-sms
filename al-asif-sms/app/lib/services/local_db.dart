@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'db_factory.dart';
@@ -61,8 +62,25 @@ class LocalDb {
   @visibleForTesting
   static set testDatabasesDir(String? dir) => _testDatabasesDir = dir;
 
-  Future<String> _databasesDir() async =>
-      _testDatabasesDir ?? await getDatabasesPath();
+  Future<String> _databasesDir() async {
+    final testDir = _testDatabasesDir;
+    if (testDir != null) return testDir;
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      // sqflite_common_ffi's default getDatabasesPath() is relative to the
+      // current working directory (`.dart_tool/sqflite_common_ffi/databases`).
+      // That is not writable under Program Files, so the installed Windows
+      // app failed to open its database with SQLITE_CANTOPEN (14). Use the
+      // per-user application support folder instead: stable across installs
+      // and updates, and always writable.
+      final support = await getApplicationSupportDirectory();
+      return p.join(support.path, 'databases');
+    }
+    return getDatabasesPath();
+  }
+
+  /// Test-only: the resolved databases directory.
+  @visibleForTesting
+  Future<String> get databasesDir => _databasesDir();
 
   Future<Database>? _opening;
 
@@ -217,6 +235,7 @@ class LocalDb {
   Future<Database> _open() async {
     initDatabaseFactory();
     final dir = await _databasesDir();
+    await Directory(dir).create(recursive: true);
     final path = p.join(dir, _dbName);
     final database = await openDatabase(
       path,

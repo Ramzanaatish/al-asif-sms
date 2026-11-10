@@ -60,13 +60,20 @@ class SyncService extends ChangeNotifier {
       if (up && !_hasNetwork) {
         _hasNetwork = true;
         notifyListeners();
-        unawaited(syncNow());
+        // Auto-sync only once a server address is saved in Settings.
+        // Without one the app would retry the unreachable default address
+        // (10.0.2.2:8000) every minute, forever.
+        if (BackendClient.instance.hasServerConfigured) {
+          unawaited(syncNow());
+        }
       } else if (!up && _hasNetwork) {
         _hasNetwork = false;
         notifyListeners();
       }
     });
-    if (_hasNetwork) unawaited(syncNow());
+    if (_hasNetwork && BackendClient.instance.hasServerConfigured) {
+      unawaited(syncNow());
+    }
   }
 
   /// One-time upgrade: the pre-offline app queued failed attendance saves in
@@ -179,6 +186,9 @@ class SyncService extends ChangeNotifier {
   /// captive wifi): without this the app stayed 'offline' until restart,
   /// because the connectivity stream only fires on radio changes.
   void _scheduleRetry() {
+    // No server address saved: nothing to retry against. Without this
+    // guard the app retried the unreachable default address every minute.
+    if (!BackendClient.instance.hasServerConfigured) return;
     _retryTimer?.cancel();
     _retryTimer = Timer(const Duration(seconds: 60), () async {
       try {
