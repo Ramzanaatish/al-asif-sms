@@ -1,11 +1,11 @@
 import 'package:alasif_sms/navigation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Guards the HTML-parity rule (v1.3.6): the app menu must match the final
-/// HTML (Complete v7) exactly — Dashboard, Students, Staff, Fees, Exams,
-/// Attendance, Expenses, Reports, Settings — and nothing else. No Academics,
-/// Profit & Loss (top level), Notices, Complaints, Audit Log, Salaries or
-/// parent menu.
+/// Guards the HTML-parity rule (v1.4.0): the app menu must match the final
+/// HTML (Complete v7) exactly, in the HTML's own order — Dashboard,
+/// Students, Attendance, Fees, Exams & Marks, Staff, Expenses, Reports,
+/// Settings — and nothing else. No Academics, Profit & Loss (top level),
+/// Notices, Complaints, Audit Log, Salaries or parent menu.
 void main() {
   List<String> titles(String role) =>
       menuForRole(role).map((m) => m.title).toList();
@@ -14,10 +14,10 @@ void main() {
     const expected = [
       'Dashboard',
       'Students',
-      'Staff',
-      'Fees',
-      'Exams',
       'Attendance',
+      'Fees',
+      'Exams & Marks',
+      'Staff',
       'Expenses',
       'Reports',
       'Settings',
@@ -31,7 +31,7 @@ void main() {
       'Dashboard',
       'Students',
       'Attendance',
-      'Exams',
+      'Exams & Marks',
       'Reports',
     ]);
   });

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../config.dart';
+
 /// Professional cards matching the HTML app: white cards, navy/gold brand,
 /// compact content. The old dashboard/report grids stretched one icon and one
 /// number across a giant square, which is why the screens looked empty.
@@ -92,6 +94,63 @@ class StatCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The HTML dashboard's stat card (`.stat`): white card, gold left border,
+/// big navy value on top, small grey label below. No icon — the HTML
+/// cards have none. Used by the dashboard only; hub screens keep StatCard.
+class HtmlStatCard extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const HtmlStatCard({super.key, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      child: Container(
+        decoration: const BoxDecoration(
+          border: Border(
+            left: BorderSide(color: AppColors.gold, width: 4),
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(10),
+            bottomLeft: Radius.circular(10),
+          ),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navy,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
             ),
           ],
         ),

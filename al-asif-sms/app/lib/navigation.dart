@@ -19,25 +19,25 @@ class MenuEntry {
 }
 
 /// Role -> visible screens. The menu matches the final HTML (Complete v7)
-/// exactly: Dashboard, Students, Staff, Fees, Exams, Attendance, Expenses,
-/// Reports, Settings — nothing else. Profit & Loss lives inside Reports
-/// (as a tile), not as its own menu entry; attendance marking lives inside
-/// the Attendance screen, not as a separate entry. There is no Academics,
-/// Notices, Complaints, Audit Log, Salaries or parent menu: none of those
-/// exist in the HTML.
+/// exactly, in the HTML's own order: Dashboard, Students, Attendance,
+/// Fees, Exams & Marks, Staff, Expenses, Reports, Settings — nothing else.
+/// Profit & Loss lives inside Reports (as a tile), not as its own menu
+/// entry; attendance marking lives inside the Attendance screen, not as a
+/// separate entry. There is no Academics, Notices, Complaints, Audit Log,
+/// Salaries or parent menu: none of those exist in the HTML.
 List<MenuEntry> menuForRole(String role) {
   final dashboard = MenuEntry('Dashboard', Icons.dashboard,
       () => const PrincipalDashboardScreen());
   final students = MenuEntry('Students', Icons.people,
       () => const StudentListScreen());
-  final staff = MenuEntry('Staff', Icons.badge,
-      () => const StaffListScreen());
-  final fees = MenuEntry('Fees', Icons.receipt_long,
-      () => const FeesHomeScreen());
-  final exams = MenuEntry('Exams', Icons.assignment,
-      () => const ExamsHomeScreen());
   final attendance = MenuEntry('Attendance', Icons.fact_check,
       () => const AttendanceHomeScreen());
+  final fees = MenuEntry('Fees', Icons.receipt_long,
+      () => const FeesHomeScreen());
+  final exams = MenuEntry('Exams & Marks', Icons.assignment,
+      () => const ExamsHomeScreen());
+  final staff = MenuEntry('Staff', Icons.badge,
+      () => const StaffListScreen());
   final expenses = MenuEntry('Expenses', Icons.money_off,
       () => const ExpenseListScreen());
   final reports = MenuEntry('Reports', Icons.bar_chart,
@@ -51,10 +51,10 @@ List<MenuEntry> menuForRole(String role) {
       return [
         dashboard,
         students,
-        staff,
+        attendance,
         fees,
         exams,
-        attendance,
+        staff,
         expenses,
         reports,
         settings,
