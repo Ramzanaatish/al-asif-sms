@@ -88,6 +88,12 @@ class ExpensesRepository {
     return Expense.fromJson(data);
   }
 
+  /// Remove an expense (soft delete, like the HTML's Delete button).
+  Future<void> delete(int id) async {
+    await _db.softDelete('expenses', 'expenses', id);
+    await _sync.notifyDirty();
+  }
+
   Future<ProfitLoss> profitLoss({int? month, int? year}) async {
     final m = month ?? DateTime.now().month;
     final y = year ?? DateTime.now().year;

@@ -10,6 +10,9 @@ class AppConfig {
   static const String schoolName = 'AL-ASIF PUBLIC MIDDLE SCHOOL BASTI SHAIKHAN';
   static const String schoolNameRegistered =
       'AL-ASIF PUBLIC MIDDLE SCHOOL BASTI SHAIKHAN \u00AE';
+  /// Urdu school name as printed on the HTML's challans (with ®).
+  static const String schoolNameUrdu =
+      'الآصف پبلک مڈل سکول بستی شیخاں\u00AE';
   static const String schoolShortName = 'Al-Asif Public Middle School';
   static const String principalName = 'Mrs. Hajra Iqbal';
 

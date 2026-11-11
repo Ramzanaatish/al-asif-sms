@@ -8,6 +8,12 @@ class StaffMember {
   final double salaryMonthly;
   final String? joiningDate;
   final String status;
+  // HTML staff fields (Complete v7 Add Staff popup): Urdu name, assigned
+  // class and login password ride in the data JSON — the server's staff
+  // record has no such fields, so they are local-only.
+  final String nameUrdu;
+  final String className;
+  final String password;
 
   const StaffMember({
     required this.id,
@@ -19,6 +25,9 @@ class StaffMember {
     this.salaryMonthly = 0,
     this.joiningDate,
     this.status = 'active',
+    this.nameUrdu = '',
+    this.className = '',
+    this.password = '',
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> j) => StaffMember(
@@ -31,7 +40,17 @@ class StaffMember {
         salaryMonthly: (j['salary_monthly'] as num?)?.toDouble() ?? 0,
         joiningDate: j['joining_date']?.toString(),
         status: j['status']?.toString() ?? 'active',
+        nameUrdu: j['name_urdu']?.toString() ?? '',
+        className: j['class_name']?.toString() ?? '',
+        password: j['password']?.toString() ?? '',
       );
+
+  /// Role label for the table (the HTML's role column): the designation
+  /// when set, otherwise Teacher / Staff by type.
+  String get roleLabel =>
+      designation.isNotEmpty
+          ? designation
+          : (staffType == 'teaching' ? 'Teacher' : 'Staff');
 }
 
 class StaffLeave {

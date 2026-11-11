@@ -46,6 +46,11 @@ class ExpensesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteExpense(int id) async {
+    await _repo.delete(id);
+    notifyListeners();
+  }
+
   Future<void> loadProfitLoss({int? month, int? year}) async {
     loading = true;
     error = null;

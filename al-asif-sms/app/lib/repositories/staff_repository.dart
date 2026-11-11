@@ -43,6 +43,10 @@ class StaffRepository {
       'salary_monthly': (body['salary_monthly'] as num?)?.toDouble() ?? 0,
       'joining_date': body['joining_date']?.toString(),
       'status': body['status']?.toString() ?? 'active',
+      // Local-only (the server's staff record has no such fields).
+      'name_urdu': body['name_urdu']?.toString() ?? '',
+      'class_name': body['class_name']?.toString() ?? '',
+      'password': body['password']?.toString() ?? '',
     };
     final localId = await _db.insert('staff', {
       'name': data['name'],
@@ -53,9 +57,24 @@ class StaffRepository {
     });
     data['id'] = localId;
     await _db.updateById('staff', localId, {'data': jsonEncode(data)});
-    await _db.enqueue('staff', 'create', localId, _plain(body));
+    // Enqueue only the fields the server accepts (StaffIn).
+    await _db.enqueue('staff', 'create', localId, _plain({
+      'name': data['name'],
+      'staff_type': data['staff_type'],
+      'designation': data['designation'],
+      'phone': data['phone'],
+      'cnic': data['cnic'],
+      'salary_monthly': data['salary_monthly'],
+      'joining_date': data['joining_date'],
+    }));
     await _sync.notifyDirty();
     return StaffMember.fromJson(data);
+  }
+
+  /// Remove a staff member (soft delete, like the HTML's Remove button).
+  Future<void> remove(int id) async {
+    await _db.softDelete('staff', 'staff', id);
+    await _sync.notifyDirty();
   }
 
   Future<StaffMember> update(int id, Map<String, dynamic> body) async {

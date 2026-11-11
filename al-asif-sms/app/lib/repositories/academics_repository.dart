@@ -46,6 +46,63 @@ class AcademicsRepository {
     return Section.fromJson(data);
   }
 
+  // ------------------------------------------------------------ HTML subjects
+  // The HTML's subject lists (Complete v7 subjectsForClass): junior
+  // classes 1-3 (Play Group, Nursery, Prep), primary 4-8 (1st-5th),
+  // middle 9-11 (6th-8th). The subjects table is filled by sync; when
+  // it has no rows for a class the screen falls back to these, and
+  // saving a mark creates the subject row (like the HTML sync client,
+  // which creates missing subjects on the server).
+  static const List<String> htmlSubjectsJunior = [
+    'English', 'Urdu', 'Maths', 'Islamiat', 'General Knowledge',
+  ];
+  static const List<String> htmlSubjectsPrimary = [
+    'English', 'Urdu', 'Maths', 'Science', 'Islamiat', 'Social Studies',
+  ];
+  static const List<String> htmlSubjectsMiddle = [
+    'English', 'Urdu', 'Maths', 'Science', 'Islamiat', 'Pakistan Studies',
+    'Computer Science',
+  ];
+
+  static List<String> htmlSubjectsForClass(int classId) {
+    if (classId <= 3) return htmlSubjectsJunior;
+    if (classId <= 8) return htmlSubjectsPrimary;
+    return htmlSubjectsMiddle;
+  }
+
+  /// Subjects for a class from the DB when present, otherwise the HTML's
+  /// list (id 0 = not yet stored; saving a mark stores the chosen one).
+  Future<List<Subject>> subjectsForClass(int classId) async {
+    final dbSubjects = await subjects(classId: classId);
+    if (dbSubjects.isNotEmpty) return dbSubjects;
+    return [
+      for (final name in htmlSubjectsForClass(classId))
+        Subject(id: 0, name: name, classId: classId),
+    ];
+  }
+
+  /// The Subject row for [name] in [classId], creating it when missing.
+  /// Created rows are dirty, so they sync to the server as real subjects.
+  Future<Subject> ensureSubject(int classId, String name) async {
+    final existing = await subjects(classId: classId);
+    for (final s in existing) {
+      if (s.name == name) return s;
+    }
+    final data = {'id': 0, 'name': name, 'class_id': classId};
+    final localId = await _db.insert('subjects', {
+      'class_id': classId,
+      'name': name,
+      'dirty': 1,
+      'data': jsonEncode(data),
+    });
+    data['id'] = localId;
+    await _db.updateById('subjects', localId, {'data': jsonEncode(data)});
+    await _db.enqueue('subjects', 'create', localId,
+        {'class_id': classId, 'name': name});
+    await _sync.notifyDirty();
+    return Subject.fromJson(data);
+  }
+
   Future<List<Subject>> subjects({int? classId}) async {
     final where = <String>['deleted = 0'];
     final args = <Object?>[];

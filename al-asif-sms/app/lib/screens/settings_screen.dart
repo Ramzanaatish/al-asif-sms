@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../models/academics.dart';
+import '../models/fee.dart';
 import '../providers/auth_provider.dart';
+import '../repositories/academics_repository.dart';
+import '../repositories/fees_repository.dart';
+import '../repositories/school_info_repository.dart';
+import '../repositories/staff_repository.dart';
+import '../repositories/teacher_assignments_repository.dart';
 import '../services/backup_service.dart';
+import '../services/backend_client.dart';
 import '../services/csv_backup_service.dart';
 import '../services/license_service.dart';
+import '../services/local_db.dart';
+import '../services/sync_service.dart';
 import '../services/update_service.dart';
 import '../widgets/school_app_bar.dart';
 import '../widgets/ui_helpers.dart';
@@ -191,6 +201,491 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  // ------------------------------------------------------------ HTML popups
+  // The HTML's Settings popups (School Info & Login, Class Monthly Fee,
+  // Teacher Assignments, Student Charges, Server Sync). Each opens a
+  // dialog that reads/writes the same meta keys the rest of the app
+  // uses, so the popups and the screens stay in sync.
+
+  Future<void> _openSchoolInfo() async {
+    final repo = SchoolInfoRepository();
+    final info = await repo.get();
+    if (!mounted) return;
+    final emis = TextEditingController(text: info.emis);
+    final tehsil = TextEditingController(text: info.tehsil);
+    final address = TextEditingController(text: info.address);
+    final pass = TextEditingController();
+    var type = info.type;
+    var shift = info.shift;
+    var showSign = info.showPrincipalSign;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDlg) => AlertDialog(
+          title: const Text('School Info & Login'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: emis,
+                    decoration: const InputDecoration(
+                        labelText: 'School EMIS / College Code')),
+                TextField(
+                    controller: tehsil,
+                    decoration:
+                        const InputDecoration(labelText: 'Tehsil')),
+                TextField(
+                    controller: address,
+                    decoration: const InputDecoration(
+                        labelText: 'School / College Address')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: type,
+                  decoration: const InputDecoration(labelText: 'Type'),
+                  items: const ['Govt', 'Private', 'Semi Private', 'Community']
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (v) => setDlg(() => type = v ?? type),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: shift,
+                  decoration: const InputDecoration(labelText: 'Shift'),
+                  items: const ['Morning', 'Evening']
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (v) => setDlg(() => shift = v ?? shift),
+                ),
+                CheckboxListTile(
+                  title: const Text(
+                      'Reports mein principal ke sign aur stamp dikhayein'),
+                  value: showSign,
+                  onChanged: (v) => setDlg(() => showSign = v ?? true),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                TextField(
+                  controller: pass,
+                  decoration: const InputDecoration(
+                      labelText:
+                          'New principal password (khali chhodein to na badle)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Save School Info')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await repo.save(SchoolInfo(
+      emis: emis.text.trim(),
+      address: address.text.trim(),
+      tehsil: tehsil.text.trim(),
+      type: type,
+      shift: shift,
+      showPrincipalSign: showSign,
+    ));
+    final np = pass.text.trim();
+    if (np.isNotEmpty) {
+      try {
+        await context.read<AuthProvider>().changePassword('principal', np);
+      } catch (e) {
+        if (mounted) showSnack(context, e.toString(), error: true);
+        return;
+      }
+    }
+    if (mounted) showSnack(context, 'School info saved.');
+  }
+
+  Future<void> _openClassFees() async {
+    final classes = await AcademicsRepository().classes();
+    final feesRepo = FeesRepository();
+    final saved = await feesRepo.classFees();
+    if (!mounted) return;
+    final ctrls = <int, TextEditingController>{};
+    for (final c in classes) {
+      ctrls[c.id] = TextEditingController(
+          text: '${(saved[c.id] ?? 800).toStringAsFixed(0)}');
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Class Monthly Fee'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: classes
+                  .map((cl) => Row(
+                        children: [
+                          Expanded(child: Text(cl.name)),
+                          SizedBox(
+                            width: 110,
+                            child: TextField(
+                              controller: ctrls[cl.id],
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  prefixText: 'Rs '),
+                            ),
+                          ),
+                        ],
+                      ))
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    for (final cl in classes) {
+      final v = double.tryParse(ctrls[cl.id]?.text.trim() ?? '');
+      if (v != null && v >= 0) await feesRepo.setClassFee(cl.id, v);
+    }
+    if (mounted) showSnack(context, 'Class fees saved.');
+  }
+
+  Future<void> _openAssignments() async {
+    final repo = TeacherAssignmentsRepository();
+    final staff = await StaffRepository().list(status: 'active');
+    final teachers =
+        staff.where((s) => s.staffType == 'teaching').map((s) => s.name).toList();
+    final classes = await AcademicsRepository().classes();
+    final classRows = await repo.classAssignments();
+    final subjectRows = await repo.subjectAssignments();
+    if (!mounted) return;
+    // Current class teacher per class (fixed mapping wins, else saved).
+    final classTeacher = <int, String?>{};
+    for (final cl in classes) {
+      final saved = classRows
+          .where((r) => (r['class_id'] as num?)?.toInt() == cl.id)
+          .firstOrNull;
+      classTeacher[cl.id] =
+          saved?['teacher']?.toString() ?? AppConfig.classTeacher(cl.name);
+    }
+    // Current subject teacher per (class, subject).
+    final subjectTeacher = <String, String?>{};
+    final subjectsByClass = <int, List<Subject>>{};
+    for (final cl in classes) {
+      final subjects =
+          await AcademicsRepository().subjectsForClass(cl.id);
+      subjectsByClass[cl.id] = subjects;
+      for (final s in subjects) {
+        final key = '${cl.id}|${s.name}';
+        final saved = subjectRows
+            .where((r) =>
+                (r['class_id'] as num?)?.toInt() == cl.id &&
+                r['subject'] == s.name)
+            .firstOrNull;
+        subjectTeacher[key] = saved?['teacher']?.toString();
+      }
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDlg) => AlertDialog(
+          title: const Text('Teacher Assignments'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Class teachers',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  for (final cl in classes)
+                    Row(
+                      children: [
+                        Expanded(child: Text(cl.name)),
+                        SizedBox(
+                          width: 170,
+                          child: DropdownButtonFormField<String>(
+                            value: classTeacher[cl.id],
+                            isExpanded: true,
+                            items: teachers
+                                .map((t) => DropdownMenuItem(
+                                    value: t, child: Text(t)))
+                                .toList(),
+                            onChanged: (v) =>
+                                setDlg(() => classTeacher[cl.id] = v),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                  const Text('Subject teachers',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  for (final cl in classes)
+                    for (final s in (subjectsByClass[cl.id] ?? const []))
+                      Row(
+                        children: [
+                          Expanded(
+                              child: Text('${cl.name} — ${s.name}')),
+                          SizedBox(
+                            width: 170,
+                            child: DropdownButtonFormField<String>(
+                              value: subjectTeacher['${cl.id}|${s.name}'],
+                              isExpanded: true,
+                              hint: const Text('All teachers'),
+                              items: teachers
+                                  .map((t) => DropdownMenuItem(
+                                      value: t, child: Text(t)))
+                                  .toList(),
+                              onChanged: (v) => setDlg(() =>
+                                  subjectTeacher['${cl.id}|${s.name}'] = v),
+                            ),
+                          ),
+                        ],
+                      ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await repo.setClassAssignments([
+      for (final cl in classes)
+        if (classTeacher[cl.id] != null)
+          {'teacher': classTeacher[cl.id]!, 'class_id': cl.id},
+    ]);
+    await repo.setSubjectAssignments([
+      for (final e in subjectTeacher.entries)
+        if (e.value != null)
+          {
+            'teacher': e.value!,
+            'class_id': int.parse(e.key.split('|').first),
+            'subject': e.key.split('|').last,
+          },
+    ]);
+    if (mounted) showSnack(context, 'Teacher assignments saved.');
+  }
+
+  Future<void> _openCharges() async {
+    final feesRepo = FeesRepository();
+    final classes = await AcademicsRepository().classes();
+    if (!mounted) return;
+    final name = TextEditingController();
+    final amount = TextEditingController();
+    var chargeClass = 0;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDlg) => AlertDialog(
+          title: const Text('Student Charges'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FutureBuilder(
+                    future: feesRepo.charges(),
+                    builder: (c, snap) {
+                      final list = snap.data ?? [];
+                      return Column(
+                        children: list
+                            .map((ch) {
+                              final className = ch.classId == null
+                                  ? 'All classes'
+                                  : classes
+                                          .where((cl) => cl.id == ch.classId)
+                                          .firstOrNull
+                                          ?.name ??
+                                      'Class ${ch.classId}';
+                              return ListTile(
+                                title: Text(ch.name),
+                                subtitle: Text(
+                                    'Rs ${ch.amount.toStringAsFixed(0)} · $className'),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete,
+                                      color: AppColors.danger),
+                                  onPressed: () async {
+                                    await feesRepo.deleteCharge(ch.name);
+                                    setDlg(() {});
+                                  },
+                                ),
+                              );
+                            })
+                            .toList(),
+                      );
+                    },
+                  ),
+                  const Divider(),
+                  TextField(
+                      controller: name,
+                      decoration:
+                          const InputDecoration(labelText: 'Charge name')),
+                  TextField(
+                    controller: amount,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Amount', prefixText: 'Rs '),
+                  ),
+                  DropdownButtonFormField<int>(
+                    value: chargeClass,
+                    decoration:
+                        const InputDecoration(labelText: 'Class'),
+                    items: [
+                      const DropdownMenuItem(
+                          value: 0, child: Text('All classes')),
+                      ...classes.map((cl) => DropdownMenuItem(
+                          value: cl.id, child: Text(cl.name))),
+                    ],
+                    onChanged: (v) =>
+                        setDlg(() => chargeClass = v ?? 0),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final amt =
+                          double.tryParse(amount.text.trim());
+                      if (name.text.trim().isEmpty || amt == null) {
+                        showSnack(context,
+                            'Charge name aur amount zaroori hain.',
+                            error: true);
+                        return;
+                      }
+                      await feesRepo.addCharge(StudentCharge(
+                        name: name.text.trim(),
+                        amount: amt,
+                        classId: chargeClass == 0 ? null : chargeClass,
+                      ));
+                      name.clear();
+                      amount.clear();
+                      setDlg(() {});
+                    },
+                    child: const Text('Add Charge'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Done')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) showSnack(context, 'Charges updated.');
+  }
+
+  Future<void> _openSync() async {
+    final urlCtrl =
+        TextEditingController(text: BackendClient.instance.baseUrl);
+    final sync = SyncService.instance;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setDlg) => AlertDialog(
+          title: const Text('Server Sync'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'PC server se live sync — APK aur software ka data aik jaisa rahe. PC on ho aur sab aik hi WiFi par hon.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(
+                    labelText: 'Server URL (e.g. http://192.168.1.50:8000)'),
+              ),
+              const SizedBox(height: 10),
+              ListenableBuilder(
+                listenable: sync,
+                builder: (c, _) => Text(
+                  sync.isSyncing
+                      ? 'Syncing...'
+                      : 'Pending changes: ${sync.pendingCount}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Close')),
+            ElevatedButton(
+              onPressed: () async {
+                await BackendClient.instance.setBaseUrl(urlCtrl.text);
+                await sync.syncNow();
+                setDlg(() {});
+                if (context.mounted) {
+                  showSnack(context, 'Sync started.');
+                }
+              },
+              child: const Text('Save & Sync now'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) showSnack(context, 'Server URL saved.');
+  }
+
+  Future<void> _resetDemo() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Reset demo data?'),
+        content: const Text(
+          'Aapki changes delete ho jayengi aur app dobara seed data (217 students, classes, fee heads) se shuru hoga. Login, license aur server URL waisay hi rahenge.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.danger),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    await LocalDb.instance.resetDemoData();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeShell()),
+      (_) => false,
+    );
   }
 
   Future<void> _importBackup() async {
@@ -519,9 +1014,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
+                onPressed: running ? null : _exportCsv,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Export CSV (APK / Flutter format)'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
                 onPressed: running ? null : _importCsv,
                 icon: const Icon(Icons.upload_outlined),
                 label: const Text('Import CSV backup'),
+              ),
+              const SizedBox(height: 24),
+              const _SectionTitle('School Settings'),
+              Card(
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.school_outlined),
+                      title: const Text('School Info & Login'),
+                      subtitle: const Text(
+                          'EMIS, address, tehsil, type, shift, principal password'),
+                      onTap: _openSchoolInfo,
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.attach_money_outlined),
+                      title: const Text('Class Monthly Fee'),
+                      subtitle: const Text(
+                          'Har class ki monthly tuition fee — popup mein edit karein'),
+                      onTap: _openClassFees,
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: const Text('Teacher Assignments'),
+                      subtitle: const Text(
+                          'Class aur subject assign karein — popup mein'),
+                      onTap: _openAssignments,
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.receipt_long_outlined),
+                      title: const Text('Student Charges'),
+                      subtitle: const Text(
+                          'Extra charges add / remove karein — popup mein'),
+                      onTap: _openCharges,
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.sync_outlined),
+                      title: const Text('Server Sync'),
+                      subtitle: const Text(
+                          'PC server se live sync — APK aur software ka data aik jaisa rahe'),
+                      onTap: _openSync,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               const _SectionTitle('App & Updates'),
@@ -549,12 +1093,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: (_busy || _checkingUpdate)
-                    ? null
-                    : _checkForUpdate,
-                icon: const Icon(Icons.system_update_outlined),
-                label: const Text('Check for updates'),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: (_busy || _checkingUpdate)
+                          ? null
+                          : _checkForUpdate,
+                      icon: const Icon(Icons.system_update_outlined),
+                      label: const Text('Check for updates'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _resetDemo,
+                      icon: const Icon(Icons.restart_alt_outlined),
+                      label: const Text('Reset demo data'),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.danger),
+                    ),
+                  ),
+                ],
               ),
             ],
           );

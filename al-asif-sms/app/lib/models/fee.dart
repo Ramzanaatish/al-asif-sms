@@ -34,6 +34,12 @@ class Challan {
   final double amountPaid;
   final double balance;
   final String status; // unpaid | partial | paid
+  /// First due name (the HTML's `head`); with items, the table shows
+  /// "head (+N more)".
+  final String head;
+  /// The dues this challan covers (fee heads + charges). The server only
+  /// knows fee heads, so items live in the local data JSON.
+  final List<ReceiptLine> items;
 
   const Challan({
     required this.id,
@@ -47,21 +53,58 @@ class Challan {
     this.amountPaid = 0,
     this.balance = 0,
     this.status = 'unpaid',
+    this.head = '',
+    this.items = const [],
   });
 
-  factory Challan.fromJson(Map<String, dynamic> j) => Challan(
-        id: (j['id'] as num?)?.toInt() ?? 0,
-        challanNo: j['challan_no']?.toString() ?? '',
-        studentId: (j['student_id'] as num?)?.toInt() ?? 0,
-        studentName: j['student_name']?.toString() ?? '',
-        month: (j['month'] as num?)?.toInt() ?? 0,
-        year: (j['year'] as num?)?.toInt() ?? 0,
-        totalAmount: (j['total_amount'] as num?)?.toDouble() ?? 0,
-        discount: (j['discount'] as num?)?.toDouble() ?? 0,
-        amountPaid: (j['amount_paid'] as num?)?.toDouble() ?? 0,
-        balance: (j['balance'] as num?)?.toDouble() ?? 0,
-        status: j['status']?.toString() ?? 'unpaid',
+  factory Challan.fromJson(Map<String, dynamic> j) {
+    final rawItems = (j['items'] as List?) ?? const [];
+    return Challan(
+      id: (j['id'] as num?)?.toInt() ?? 0,
+      challanNo: j['challan_no']?.toString() ?? '',
+      studentId: (j['student_id'] as num?)?.toInt() ?? 0,
+      studentName: j['student_name']?.toString() ?? '',
+      month: (j['month'] as num?)?.toInt() ?? 0,
+      year: (j['year'] as num?)?.toInt() ?? 0,
+      totalAmount: (j['total_amount'] as num?)?.toDouble() ?? 0,
+      discount: (j['discount'] as num?)?.toDouble() ?? 0,
+      amountPaid: (j['amount_paid'] as num?)?.toDouble() ?? 0,
+      balance: (j['balance'] as num?)?.toDouble() ?? 0,
+      status: j['status']?.toString() ?? 'unpaid',
+      head: j['head']?.toString() ?? '',
+      items: rawItems
+          .map((l) =>
+              ReceiptLine.fromJson((l as Map).cast<String, dynamic>()))
+          .toList(),
+    );
+  }
+
+  /// Display head for the Challans table, e.g. "Monthly Tuition Fee (+2 more)".
+  String get headLabel {
+    if (head.isEmpty) return '-';
+    if (items.length <= 1) return head;
+    return '$head (+${items.length - 1} more)';
+  }
+}
+
+/// A one-off student charge (Paper Printing Fee, Sports Fund, ...). The
+/// HTML keeps charges apart from fee heads; the app stores them in the
+/// meta table (no server table exists for them), so they are local-only.
+class StudentCharge {
+  final String name;
+  final double amount;
+  final int? classId; // null = all classes
+
+  const StudentCharge({required this.name, this.amount = 0, this.classId});
+
+  factory StudentCharge.fromJson(Map<String, dynamic> j) => StudentCharge(
+        name: j['name']?.toString() ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0,
+        classId: (j['class_id'] as num?)?.toInt(),
       );
+
+  Map<String, dynamic> toJson() =>
+      {'name': name, 'amount': amount, 'class_id': classId};
 }
 
 class ReceiptLine {

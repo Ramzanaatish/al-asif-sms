@@ -119,6 +119,20 @@ class LocalDb {
     await d?.close();
   }
 
+  /// Reset demo data (the HTML's Settings "Reset demo data"): close the
+  /// database, delete its file (and WAL sidecars), and let the next open
+  /// re-create it from the bundled seed. Login, license and server URL
+  /// are kept — only the school data is reset.
+  Future<void> resetDemoData() async {
+    await close();
+    _opening = null;
+    final dir = await _databasesDir();
+    for (final suffix in ['', '-wal', '-shm', '-journal']) {
+      final file = File(p.join(dir, '$_dbName$suffix'));
+      if (await file.exists()) await file.delete();
+    }
+  }
+
   /// Names of every table included in a CSV backup: all entity tables plus
   /// the audit log. The sync queue (transient) and meta (device-specific
   /// keys like the backup folder) are deliberately left out.

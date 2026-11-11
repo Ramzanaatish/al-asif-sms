@@ -84,6 +84,155 @@ class ExamsRepository {
     await _sync.notifyDirty();
   }
 
+  // ------------------------------------------------------------ HTML terms
+  // The HTML's five term names (Complete v7 marks entry). The terms
+  // table is filled by sync; when it is empty the screen falls back to
+  // these, and saving a mark creates the term row (like the HTML sync
+  // client, which creates missing terms on the server).
+  static const List<(String, String)> htmlTerms = [
+    ('Monthly Test', 'monthly'),
+    ('First Term', 'monthly'),
+    ('Mid Term', 'monthly'),
+    ('Final Term', 'monthly'),
+    ('Annual', 'annual'),
+  ];
+
+  /// Terms from the DB when present, otherwise the HTML's five terms
+  /// (id 0 = not yet stored; saving a mark stores the chosen one).
+  Future<List<Term>> termsOrHtml() async {
+    final dbTerms = await terms();
+    if (dbTerms.isNotEmpty) return dbTerms;
+    return [
+      for (final (name, type) in htmlTerms)
+        Term(id: 0, name: name, termType: type),
+    ];
+  }
+
+  /// The Term row for [name] (by exact name), creating it when missing.
+  /// Created rows are dirty, so they sync to the server as real terms.
+  Future<Term> ensureTerm(String name) async {
+    final existing = await terms();
+    for (final t in existing) {
+      if (t.name == name) return t;
+    }
+    final type = htmlTerms
+        .where((t) => t.$1 == name)
+        .firstOrNull
+        ?.$2 ?? 'monthly';
+    return createTerm({'name': name, 'term_type': type});
+  }
+
+  // ------------------------------------------------------------ mark totals
+  // Per-class/subject/term total marks (the HTML's S.markTotals, keyed
+  // "classId|subjectId|termId"). Default 100.
+  static const _markTotalsKey = 'mark_totals';
+
+  Future<int> markTotal({
+    required int classId,
+    required int subjectId,
+    required int termId,
+  }) async {
+    final m = await _db.getMetaJson(_markTotalsKey);
+    final v = m?['$classId|$subjectId|$termId'];
+    return (v as num?)?.toInt() ?? 100;
+  }
+
+  Future<void> setMarkTotal({
+    required int classId,
+    required int subjectId,
+    required int termId,
+    required int total,
+  }) async {
+    final m = await _db.getMetaJson(_markTotalsKey) ?? {};
+    m['$classId|$subjectId|$termId'] = total;
+    await _db.setMetaJson(_markTotalsKey, m);
+  }
+
+  // ------------------------------------------------------------ single mark
+  /// Save ONE student's mark (auto-save on change, like the HTML's
+  /// setMark). The local row is upserted, then a single bulk sync op
+  /// carrying ALL marks for this (term, class, subject) is enqueued —
+  /// any pending op for the same combination is dropped first, so
+  /// repeated auto-saves leave at most one queued op per combination
+  /// instead of flooding the queue.
+  Future<void> saveMark({
+    required int termId,
+    required int classId,
+    required int subjectId,
+    required int studentId,
+    required double obtained,
+    required double total,
+  }) async {
+    final existing = await _db.query('marks',
+        where: 'term_id = ? AND subject_id = ? AND student_id = ? AND deleted = 0',
+        whereArgs: [termId, subjectId, studentId],
+        limit: 1);
+    final data = {
+      'term_id': termId,
+      'class_id': classId,
+      'subject_id': subjectId,
+      'student_id': studentId,
+      'total_marks': total,
+      'obtained_marks': obtained,
+    };
+    if (existing.isEmpty) {
+      await _db.insert('marks', {
+        'term_id': termId,
+        'class_id': classId,
+        'subject_id': subjectId,
+        'student_id': studentId,
+        'dirty': 1,
+        'data': jsonEncode(data),
+      });
+    } else {
+      await _db.updateById('marks', (existing.first['id'] as num).toInt(), {
+        'dirty': 1,
+        'data': jsonEncode(data),
+      });
+    }
+    // Coalesce: drop any pending bulk op for this combination, then
+    // enqueue one carrying the full current record set.
+    final pending = await _db.query('sync_queue',
+        where: "entity = 'marks' AND op = 'bulk'");
+    for (final op in pending) {
+      try {
+        final p = jsonDecode(LocalDb.strOf(op['payload_json']))
+            as Map<String, dynamic>;
+        if (p['term_id'] == termId &&
+            p['class_id'] == classId &&
+            p['subject_id'] == subjectId) {
+          await _db.dequeue((op['id'] as num).toInt());
+        }
+      } catch (_) {
+        // A malformed queued payload is left for the sync engine.
+      }
+    }
+    final all = await marks(
+        termId: termId, classId: classId, subjectId: subjectId);
+    await _db.enqueue('marks', 'bulk', null, {
+      'term_id': termId,
+      'class_id': classId,
+      'subject_id': subjectId,
+      'total_marks': total,
+      'records': all,
+    });
+    await _sync.notifyDirty();
+  }
+
+  /// Grade for [obtained] out of [total] (the HTML's gradePct): A+ 90+,
+  /// A 80+, B 70+, C 60+, D 50+, E 40+, F below 40.
+  static String gradeFor(double obtained, double total) {
+    if (total <= 0) return '-';
+    final pct = (obtained / total * 100).round();
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 70) return 'B';
+    if (pct >= 60) return 'C';
+    if (pct >= 50) return 'D';
+    if (pct >= 40) return 'E';
+    return 'F';
+  }
+
   Future<int> saveMarks(Map<String, dynamic> payload) async {
     final termId = (payload['term_id'] as num).toInt();
     final classId = (payload['class_id'] as num).toInt();

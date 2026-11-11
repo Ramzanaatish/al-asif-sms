@@ -36,7 +36,12 @@ class BackendClient {
   /// Set by AuthProvider; invoked on 401.
   static VoidCallback? onUnauthorized;
 
-  static const Duration _timeout = Duration(seconds: 25);
+  /// Per-request timeout for the LAN sync server. A local PC server
+  /// answers in well under a second; the old 25s value let one stalled
+  /// request hold the whole sync (and the "Syncing..." banner) for minutes
+  /// when the server was slow or black-holing. 5s fails fast and the sync
+  /// retry picks the run up again.
+  static const Duration syncTimeout = Duration(seconds: 5);
 
   String? _token;
   SharedPreferences? _prefs;
@@ -57,6 +62,10 @@ class BackendClient {
       AppConfig.apiBaseUrl = savedUrl!;
     }
   }
+
+  /// The server address currently in use (from Settings / login, or the
+  /// built-in default when none was saved).
+  String get baseUrl => AppConfig.apiBaseUrl;
 
   /// Persist a new server address (e.g. http://192.168.1.50:8000).
   Future<void> setBaseUrl(String url) async {
@@ -127,7 +136,7 @@ class BackendClient {
     }
     late http.Response res;
     try {
-      res = await call().timeout(_timeout);
+      res = await call().timeout(syncTimeout);
     } on TimeoutException {
       throw NetworkException('Request timed out. Check your connection.');
     } on SocketException {

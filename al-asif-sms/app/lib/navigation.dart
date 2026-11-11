@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'screens/attendance/attendance_home_screen.dart';
+import 'screens/attendance/mark_attendance_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/exams/exams_home_screen.dart';
+import 'screens/exams/exams_screen.dart';
 import 'screens/expenses/expense_list_screen.dart';
-import 'screens/fees/fees_home_screen.dart';
+import 'screens/fees/fees_screen.dart';
 import 'screens/reports_home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/staff/staff_list_screen.dart';
@@ -31,11 +31,11 @@ List<MenuEntry> menuForRole(String role) {
   final students = MenuEntry('Students', Icons.people,
       () => const StudentListScreen());
   final attendance = MenuEntry('Attendance', Icons.fact_check,
-      () => const AttendanceHomeScreen());
+      () => const MarkAttendanceScreen());
   final fees = MenuEntry('Fees', Icons.receipt_long,
-      () => const FeesHomeScreen());
+      () => const FeesScreen());
   final exams = MenuEntry('Exams & Marks', Icons.assignment,
-      () => const ExamsHomeScreen());
+      () => const ExamsScreen());
   final staff = MenuEntry('Staff', Icons.badge,
       () => const StaffListScreen());
   final expenses = MenuEntry('Expenses', Icons.money_off,

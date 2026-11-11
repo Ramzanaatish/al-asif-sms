@@ -164,6 +164,63 @@ class AttendanceRepository {
     return queued;
   }
 
+  /// Per-day attendance register for one class + month (the Reports
+  /// "Monthly Attendance Report"): students in roll order, the days of
+  /// the month, and each student's P/A/L per day. Returns
+  /// (students, daysInMonth, totalDays, cells) where cells maps
+  /// studentId -> day -> 'P' | 'A' | 'L'.
+  Future<({
+    List<Map<String, dynamic>> students,
+    int daysInMonth,
+    int totalDays,
+    Map<int, Map<int, String>> cells,
+  })> register({
+    required int classId,
+    required int month,
+    required int year,
+  }) async {
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final prefix =
+        '$year-${month.toString().padLeft(2, '0')}';
+    final students = await _db.query('students',
+        where: "class_id = ? AND status = 'active' AND deleted = 0",
+        whereArgs: [classId],
+        orderBy:
+            'CASE WHEN roll_number IS NULL THEN 1 ELSE 0 END, roll_number ASC, name ASC');
+    final rows = await _db.query('student_attendance',
+        where: 'date LIKE ? AND deleted = 0',
+        whereArgs: ['$prefix-%']);
+    final cells = <int, Map<int, String>>{};
+    final markedDays = <String>{};
+    for (final r in rows) {
+      final sid = LocalDb.intOf(r['student_id']);
+      final date = LocalDb.strOf(r['date']);
+      final day = int.tryParse(date.substring(8, 10)) ?? 0;
+      if (day < 1 || day > daysInMonth) continue;
+      // Only days with a record for this class count as school days.
+      final studentClass = students
+          .where((s) => (s['id'] as num).toInt() == sid)
+          .firstOrNull;
+      if (studentClass == null) continue;
+      markedDays.add(date);
+      final status = LocalDb.strOf(r['status']);
+      (cells[sid] ??= {})[day] =
+          status == 'present' ? 'P' : status == 'absent' ? 'A' : 'L';
+    }
+    return (
+      students: students
+          .map((s) => {
+                'id': s['id'],
+                'name': LocalDb.strOf(s['name']),
+                'roll': s['roll_number'],
+              })
+          .toList(),
+      daysInMonth: daysInMonth,
+      totalDays: markedDays.length,
+      cells: cells,
+    );
+  }
+
   Future<MonthlyAttendanceReport> monthly({
     int? month,
     int? year,

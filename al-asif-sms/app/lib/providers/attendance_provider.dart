@@ -24,9 +24,13 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Refresh the pending count only. A full sync runs in the background
+  /// via SyncService (boot auto-sync, connectivity changes, or the banner
+  /// tap). The old code awaited syncNow() here, so opening the Attendance
+  /// screen left its "Syncing..." banner up for the whole sync — minutes
+  /// on a slow server — while the class list waited behind it.
   Future<void> init() async {
     await _refreshPendingCount();
-    await syncPending();
   }
 
   /// Saves attendance; returns {'saved': n}. Offline saves never fail —

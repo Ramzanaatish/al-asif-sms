@@ -344,24 +344,36 @@ class SyncService extends ChangeNotifier {
 
   /// Translate local ids in [payload] to server ids in place.
   /// Returns false if any referenced row has no server id yet (caller skips).
+  /// The lookups are independent reads, so they run in parallel.
   Future<bool> _resolveRefs(Map<String, dynamic> payload) async {
+    final jobs = <Future<({String field, List<int>? ids})>>[];
     for (final e in _refTables.entries) {
       final field = e.key;
       final v = payload[field];
       if (v == null) continue;
       if (v is List) {
-        final out = <int>[];
-        for (final id in v) {
-          final sid = await _serverIdOf(e.value, (id as num).toInt());
-          if (sid == null) return false;
-          out.add(sid);
-        }
-        payload[field] = out;
+        jobs.add(Future(() async {
+          final out = <int>[];
+          for (final id in v) {
+            final sid = await _serverIdOf(e.value, (id as num).toInt());
+            if (sid == null) return (field: field, ids: null);
+            out.add(sid);
+          }
+          return (field: field, ids: out);
+        }));
       } else if (v is num && v != 0) {
-        final sid = await _serverIdOf(e.value, v.toInt());
-        if (sid == null) return false;
-        payload[field] = sid;
+        jobs.add(_serverIdOf(e.value, v.toInt()).then(
+            (sid) => (field: field, ids: sid == null ? null : [sid])));
       }
+    }
+    if (jobs.isEmpty) return true;
+    final results = await Future.wait(jobs);
+    for (final r in results) {
+      // A null result means a referenced row has no server id yet; the
+      // whole op waits for the next pass. An empty list is a real value.
+      if (r.ids == null) return false;
+      payload[r.field] =
+          (payload[r.field] is List) ? r.ids! : r.ids!.first;
     }
     return true;
   }
@@ -633,16 +645,26 @@ class SyncService extends ChangeNotifier {
           whereArgs: [localStu, month, year]);
       if (rows.isEmpty) continue;
       final localId = (rows.first['id'] as num).toInt();
+      // total/discount/amount_paid live ONLY in the data JSON (the
+      // fee_challans table has no such columns — passing them to updateById
+      // threw "no such column" and the reconcile never completed).
+      // Preserve the local item breakdown: the server only knows fee heads,
+      // so its total excludes local charges; the local total stays.
+      final localData = LocalDb.dataOf(rows.first);
+      final merged = {...c, 'id': localId};
+      if (localData['items'] is List &&
+          (localData['items'] as List).isNotEmpty) {
+        merged['items'] = localData['items'];
+        merged['head'] = localData['head'];
+        merged['total_amount'] = localData['total_amount'];
+      }
       await _db.updateById('fee_challans', localId, {
         'server_id': (c['id'] as num).toInt(),
         'challan_no': c['challan_no']?.toString(),
-        'total_amount': (c['total_amount'] as num?)?.toDouble(),
-        'discount': (c['discount'] as num?)?.toDouble(),
-        'amount_paid': (c['amount_paid'] as num?)?.toDouble(),
         'status': c['status']?.toString(),
         'provisional': 0,
         'dirty': 0,
-        'data': jsonEncode({...c, 'id': localId}),
+        'data': jsonEncode(merged),
       });
     }
   }
@@ -664,15 +686,26 @@ class SyncService extends ChangeNotifier {
     final map = (res as Map).cast<String, dynamic>();
     final srvChallan = (map['challan'] as Map).cast<String, dynamic>();
     final srvReceipt = (map['receipt'] as Map).cast<String, dynamic>();
+    // total/discount/amount_paid live ONLY in the data JSON (the
+    // fee_challans table has no such columns — passing them to updateById
+    // threw "no such column", so fee collections never reached the server).
+    // Preserve the local item breakdown (multi-due / charges).
+    final localRow = await _db.getById('fee_challans', challanLocal);
+    final localData =
+        localRow == null ? <String, dynamic>{} : LocalDb.dataOf(localRow);
+    final merged = {...srvChallan, 'id': challanLocal};
+    if (localData['items'] is List &&
+        (localData['items'] as List).isNotEmpty) {
+      merged['items'] = localData['items'];
+      merged['head'] = localData['head'];
+      merged['total_amount'] = localData['total_amount'];
+    }
     await _db.updateById('fee_challans', challanLocal, {
       'server_id': (srvChallan['id'] as num).toInt(),
-      'total_amount': (srvChallan['total_amount'] as num?)?.toDouble(),
-      'discount': (srvChallan['discount'] as num?)?.toDouble(),
-      'amount_paid': (srvChallan['amount_paid'] as num?)?.toDouble(),
       'status': srvChallan['status']?.toString(),
       'provisional': 0,
       'dirty': 0,
-      'data': jsonEncode({...srvChallan, 'id': challanLocal}),
+      'data': jsonEncode(merged),
     });
     if (receiptLocal != null) {
       // The collect response carries no receipt id; the server id is resolved
@@ -762,41 +795,54 @@ class SyncService extends ChangeNotifier {
   // ================================================================ PULL
 
   /// Pull authoritative data after pushing. Local dirty rows always win.
+  ///
+  /// Independent pulls run in parallel (Future.wait): the old code awaited
+  /// ~15 requests one by one, so a slow server multiplied its latency by
+  /// the request count and the sync looked stuck. Order is kept only where
+  /// it matters: classes first (their server ids feed the id maps), then
+  /// the simple lists, then students/staff, then the month-scoped lists.
   Future<void> _pullAll() async {
     var idMaps = await _buildIdMaps();
     await _pullClasses(idMaps);
     // Classes/sections may just have been linked to seeded rows; rebuild so
     // later filters translate against the fresh server->local maps.
     idMaps = await _buildIdMaps();
-    await _pullSimpleList('/api/academics/subjects', 'subjects', idMaps,
-        (j) => {'class_id': j['class_id'], 'name': j['name']},
-        naturalKey: const ['class_id', 'name']);
-    await _pullSimpleList('/api/fees/heads', 'fee_heads', idMaps,
-        (j) => {'name': j['name'], 'class_id': j['class_id']},
-        naturalKey: const ['name']);
-    await _pullSimpleList('/api/expenses/categories', 'expense_categories',
-        idMaps, (j) => {'name': j['name']},
-        naturalKey: const ['name']);
-    await _pullSimpleList('/api/exams/terms', 'exam_terms', idMaps,
-        (j) => {'name': j['name'], 'term_type': j['term_type'], 'session_id': j['session_id']},
-        naturalKey: const ['name']);
-    await _pullSimpleList('/api/comms/notices', 'notices', idMaps,
-        (j) => {'audience': j['audience'], 'created_at': j['created_at']?.toString()});
-    await _pullSimpleList('/api/comms/complaints', 'complaints', idMaps,
-        (j) => {'status': j['status'], 'parent_user_id': j['parent_user_id']});
-    await _pullSimpleList('/api/staff/leaves', 'staff_leaves', idMaps,
-        (j) => {'staff_id': j['staff_id'], 'status': j['status'], 'from_date': j['from_date']?.toString()});
-    await _pullSimpleList('/api/exams/datesheets', 'date_sheets', idMaps,
-        (j) => {'term_id': j['term_id'], 'class_id': j['class_id'], 'subject_id': j['subject_id'], 'exam_date': j['exam_date']?.toString()});
-    await _pullStudents(idMaps);
-    await _pullStaff(idMaps);
+    final maps = idMaps;
+    await Future.wait([
+      _pullSimpleList('/api/academics/subjects', 'subjects', maps,
+          (j) => {'class_id': j['class_id'], 'name': j['name']},
+          naturalKey: const ['class_id', 'name']),
+      _pullSimpleList('/api/fees/heads', 'fee_heads', maps,
+          (j) => {'name': j['name'], 'class_id': j['class_id']},
+          naturalKey: const ['name']),
+      _pullSimpleList('/api/expenses/categories', 'expense_categories',
+          maps, (j) => {'name': j['name']},
+          naturalKey: const ['name']),
+      _pullSimpleList('/api/exams/terms', 'exam_terms', maps,
+          (j) => {'name': j['name'], 'term_type': j['term_type'], 'session_id': j['session_id']},
+          naturalKey: const ['name']),
+      _pullSimpleList('/api/comms/notices', 'notices', maps,
+          (j) => {'audience': j['audience'], 'created_at': j['created_at']?.toString()}),
+      _pullSimpleList('/api/comms/complaints', 'complaints', maps,
+          (j) => {'status': j['status'], 'parent_user_id': j['parent_user_id']}),
+      _pullSimpleList('/api/staff/leaves', 'staff_leaves', maps,
+          (j) => {'staff_id': j['staff_id'], 'status': j['status'], 'from_date': j['from_date']?.toString()}),
+      _pullSimpleList('/api/exams/datesheets', 'date_sheets', maps,
+          (j) => {'term_id': j['term_id'], 'class_id': j['class_id'], 'subject_id': j['subject_id'], 'exam_date': j['exam_date']?.toString()}),
+    ]);
+    await Future.wait([
+      _pullStudents(maps),
+      _pullStaff(maps),
+    ]);
     await _pullHolidays();
     final now = DateTime.now();
-    await _pullSimpleList('/api/staff/salaries', 'salaries', idMaps,
-        (j) => {'staff_id': j['staff_id'], 'month': j['month'], 'year': j['year']},
-        query: {'month': now.month.toString(), 'year': now.year.toString()});
-    await _pullChallans(idMaps, now.month, now.year);
-    await _pullReceipts(idMaps, now.month, now.year);
+    await Future.wait([
+      _pullSimpleList('/api/staff/salaries', 'salaries', maps,
+          (j) => {'staff_id': j['staff_id'], 'month': j['month'], 'year': j['year']},
+          query: {'month': now.month.toString(), 'year': now.year.toString()}),
+      _pullChallans(maps, now.month, now.year),
+      _pullReceipts(maps, now.month, now.year),
+    ]);
   }
 
   /// server_id -> local id maps, rebuilt per pull.
@@ -942,33 +988,39 @@ class SyncService extends ChangeNotifier {
 
   Future<void> _pullHolidays() async {
     final now = DateTime.now();
-    for (final m in [now.month, now.month % 12 + 1]) {
-      final y = m == 1 && now.month == 12 ? now.year + 1 : now.year;
-      dynamic res;
-      try {
-        res = await _c.get('/api/attendance/holidays',
-            query: {'month': m.toString(), 'year': y.toString()});
-      } on ApiException {
-        continue;
-      }
-      // Server expands ranges into individual day entries; store each day.
-      final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
-      for (final j in list) {
-        final date = j['date']?.toString() ?? '';
-        final rows = await _db.query('holidays',
-            where: 'date = ? AND kind = ? AND deleted = 0',
-            whereArgs: [date, j['kind']?.toString() ?? 'unexpected']);
-        if (rows.isEmpty) {
-          await _db.insert('holidays', {
-            'server_id': null, // day-entries have no stable server id
-            'date': date,
-            'kind': j['kind']?.toString(),
-            'data': jsonEncode({...j, 'id': 0}),
-            'dirty': 0,
-            'deleted': 0,
-            'provisional': 0,
-          });
-        }
+    // The two month requests are independent; fetch them together.
+    await Future.wait([
+      _pullHolidayMonth(now.month, now.year),
+      _pullHolidayMonth(now.month % 12 + 1,
+          now.month == 12 ? now.year + 1 : now.year),
+    ]);
+  }
+
+  Future<void> _pullHolidayMonth(int month, int year) async {
+    dynamic res;
+    try {
+      res = await _c.get('/api/attendance/holidays',
+          query: {'month': month.toString(), 'year': year.toString()});
+    } on ApiException {
+      return;
+    }
+    // Server expands ranges into individual day entries; store each day.
+    final list = (res as List? ?? []).cast<Map>().map((e) => e.cast<String, dynamic>());
+    for (final j in list) {
+      final date = j['date']?.toString() ?? '';
+      final rows = await _db.query('holidays',
+          where: 'date = ? AND kind = ? AND deleted = 0',
+          whereArgs: [date, j['kind']?.toString() ?? 'unexpected']);
+      if (rows.isEmpty) {
+        await _db.insert('holidays', {
+          'server_id': null, // day-entries have no stable server id
+          'date': date,
+          'kind': j['kind']?.toString(),
+          'data': jsonEncode({...j, 'id': 0}),
+          'dirty': 0,
+          'deleted': 0,
+          'provisional': 0,
+        });
       }
     }
   }
@@ -988,6 +1040,18 @@ class SyncService extends ChangeNotifier {
       final localStu = _localId(idMaps, 'students', j['student_id']);
       if (localStu == null) continue;
       final data = Map<String, dynamic>.from(j)..['student_id'] = localStu;
+      // Preserve the local item breakdown (multi-due / charges): the
+      // server only knows fee heads, so a plain upsert would wipe it.
+      final existing = await _db.getByServerId('fee_challans', serverId);
+      if (existing != null) {
+        final localData = LocalDb.dataOf(existing);
+        if (localData['items'] is List &&
+            (localData['items'] as List).isNotEmpty) {
+          data['items'] = localData['items'];
+          data['head'] = localData['head'];
+          data['total_amount'] = localData['total_amount'];
+        }
+      }
       await _upsertPulled('fee_challans', serverId, {
         'challan_no': j['challan_no']?.toString(),
         'student_id': localStu,

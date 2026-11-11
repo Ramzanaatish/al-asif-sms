@@ -35,6 +35,16 @@ class PdfAssets {
   static PdfColor get gold => PdfColor.fromInt(0xFFC9A227);
   static PdfColor get grey => PdfColors.grey700;
 
+  /// Urdu month names, in the HTML's MONTHS_URDU order.
+  static const List<String> urduMonths = [
+    'جنوری', 'فروری', 'مارچ', 'اپریل', 'مئی', 'جون',
+    'جولائی', 'اگست', 'ستمبر', 'اکتوبر', 'نومبر', 'دسمبر',
+  ];
+
+  /// Urdu name of month [month] (1-12), e.g. 11 -> 'نومبر'.
+  static String urduMonthName(int month) =>
+      (month >= 1 && month <= 12) ? urduMonths[month - 1] : '';
+
   /// English letterhead: logo left, registered school name centred.
   static pw.Widget letterhead(pw.MemoryImage logoImg, {double size = 13}) {
     return pw.Column(
