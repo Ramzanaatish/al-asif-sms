@@ -32,6 +32,16 @@ class Student {
   final List<StudentDocument> documents;
   final double? attendancePct;
   final double? feeBalance;
+  // HTML student fields (Complete v7 New Student popup): Urdu names are
+  // auto-filled by the transliterator and hand-correctable; mother,
+  // B-Form, group and New/Old admission status ride in the data JSON.
+  final String nameUrdu;
+  final String fatherUrdu;
+  final String motherName;
+  final String motherNameUrdu;
+  final String bForm;
+  final String groupName;
+  final String admStatus; // New | Old
   // Leaving-certificate fields (populated after mark-left)
   final String? leavingDate;
   final String? leavingReason;
@@ -57,6 +67,13 @@ class Student {
     this.documents = const [],
     this.attendancePct,
     this.feeBalance,
+    this.nameUrdu = '',
+    this.fatherUrdu = '',
+    this.motherName = '',
+    this.motherNameUrdu = '',
+    this.bForm = '',
+    this.groupName = '',
+    this.admStatus = 'New',
     this.leavingDate,
     this.leavingReason,
     this.admissionDate,
@@ -86,6 +103,19 @@ class Student {
           .toList(),
       attendancePct: (j['attendance_pct'] as num?)?.toDouble(),
       feeBalance: (j['fee_balance'] as num?)?.toDouble(),
+      nameUrdu: j['name_urdu']?.toString() ?? '',
+      fatherUrdu: j['father_urdu']?.toString() ?? '',
+      motherName: j['mother_name']?.toString() ??
+          j['mother']?.toString() ??
+          '',
+      motherNameUrdu: j['mother_name_urdu']?.toString() ??
+          j['mother_urdu']?.toString() ??
+          '',
+      bForm: j['b_form']?.toString() ?? j['bform']?.toString() ?? '',
+      groupName:
+          j['group_name']?.toString() ?? j['group']?.toString() ?? '',
+      admStatus:
+          j['adm_status']?.toString() ?? j['admStatus']?.toString() ?? 'New',
       leavingDate: j['leaving_date']?.toString(),
       leavingReason: j['leaving_reason']?.toString(),
       admissionDate: j['admission_date']?.toString(),

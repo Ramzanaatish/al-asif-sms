@@ -37,13 +37,21 @@ class StudentProvider extends ChangeNotifier {
 
   Future<String> nextAdmissionNo() => _repo.nextAdmissionNo();
 
-  Future<void> admit(Map<String, dynamic> body) async {
-    await _repo.create(body);
+  /// Admits a student and returns the created record (the admission
+  /// screen needs the admission number to store the photo under).
+  Future<Student> admit(Map<String, dynamic> body) async {
+    final created = await _repo.create(body);
     notifyListeners();
+    return created;
   }
 
   Future<void> updateStudent(int id, Map<String, dynamic> body) async {
     await _repo.update(id, body);
+    notifyListeners();
+  }
+
+  Future<void> deleteStudent(int id) async {
+    await _repo.deleteStudent(id);
     notifyListeners();
   }
 

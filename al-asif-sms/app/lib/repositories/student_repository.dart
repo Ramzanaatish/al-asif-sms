@@ -89,24 +89,44 @@ class StudentRepository {
     final sectionRow = body['section_id'] != null
         ? await _db.getById('sections', (body['section_id'] as num).toInt())
         : null;
+    // The HTML assigns the roll number automatically: the next free
+    // roll in the class (students in the class + 1).
+    var rollNumber = body['roll_number'] as int?;
+    if (rollNumber == null && body['class_id'] != null) {
+      final inClass = await _db.count('students',
+          where: 'class_id = ? AND deleted = 0',
+          whereArgs: [(body['class_id'] as num).toInt()]);
+      rollNumber = inClass + 1;
+    }
     final data = <String, dynamic>{
       'id': 0,
       'admission_no': admissionNo,
-      'roll_number': body['roll_number'],
+      'roll_number': rollNumber,
       'name': body['name']?.toString() ?? '',
       'dob': body['dob']?.toString(),
       'gender': body['gender']?.toString(),
       'class_id': body['class_id'],
       'class_name': classRow == null ? '' : LocalDb.strOf(classRow['name']),
       'section_id': body['section_id'],
-      'section_name':
-          sectionRow == null ? '' : LocalDb.strOf(sectionRow['name']),
+      'section_name': body['section_name']?.toString() ??
+          (sectionRow == null ? '' : LocalDb.strOf(sectionRow['name'])),
       'guardian_name': body['guardian_name']?.toString() ?? '',
       'guardian_phone': body['guardian_phone']?.toString() ?? '',
       'guardian_relation': body['guardian_relation']?.toString() ?? '',
       'address': body['address']?.toString() ?? '',
       'status': 'active',
       'photo_path': body['photo_path']?.toString(),
+      // HTML student fields (Complete v7): Urdu names (auto-filled, hand
+      // correctable), mother, B-Form, group and New/Old admission status.
+      // Key names match the server columns added in Backend v1.1, so the
+      // sync engine carries them to the PC server as-is.
+      'name_urdu': body['name_urdu']?.toString() ?? '',
+      'father_urdu': body['father_urdu']?.toString() ?? '',
+      'mother_name': body['mother_name']?.toString() ?? '',
+      'mother_name_urdu': body['mother_name_urdu']?.toString() ?? '',
+      'b_form': body['b_form']?.toString() ?? '',
+      'group_name': body['group_name']?.toString() ?? '',
+      'adm_status': body['adm_status']?.toString() ?? 'New',
       'documents': body['documents'] ?? [],
       'admission_date':
           DateTime.now().toIso8601String().substring(0, 10),
@@ -115,7 +135,7 @@ class StudentRepository {
     };
     final localId = await _db.insert('students', {
       'admission_no': admissionNo,
-      'roll_number': body['roll_number'],
+      'roll_number': rollNumber,
       'name': data['name'],
       'class_id': body['class_id'],
       'section_id': body['section_id'],
@@ -174,6 +194,14 @@ class StudentRepository {
     await _db.enqueue('students', 'update', id, _plainBody(body));
     await _sync.notifyDirty();
     return Student.fromJson(data);
+  }
+
+  /// Soft-deletes a student (the HTML Students table's Delete button):
+  /// the row is marked deleted locally and the delete is enqueued for
+  /// sync, exactly like every other local write.
+  Future<void> deleteStudent(int id) async {
+    await _db.softDelete('students', 'students', id);
+    await _sync.notifyDirty();
   }
 
   /// Returns {'student': {...}, 'certificate': {...}} like the server.
