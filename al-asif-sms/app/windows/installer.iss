@@ -7,7 +7,7 @@
 ; Version note: keep MyAppVersion in step with pubspec.yaml.
 
 #define MyAppName "Al-Asif SMS"
-#define MyAppVersion "1.4.7"
+#define MyAppVersion "1.4.8"
 #define MyAppPublisher "Al-Asif Public Middle School"
 #define MyAppExeName "alasif_sms.exe"
 

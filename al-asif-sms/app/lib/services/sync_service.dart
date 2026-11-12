@@ -36,6 +36,15 @@ class SyncService extends ChangeNotifier {
   String? _lastSyncAt;
   String? _lastError;
 
+  /// Test-only: when true, [notifyDirty] skips its fire-and-forget
+  /// background work (auto-backup counting + background sync). Those two
+  /// unawaited tasks race with test tearDown (close + delete the temp
+  /// dir) and re-open the shared [LocalDb] singleton at a stale temp
+  /// directory, which made the parity tests flaky (UNIQUE constraint,
+  /// "database has already been closed", "unable to open database
+  /// file"). Set from test/flutter_test_config.dart; never set in the app.
+  static bool testMode = false;
+
   bool get isOnline => _hasNetwork;
   bool get isSyncing => _syncing;
   int get pendingCount => _pending;
@@ -145,6 +154,9 @@ class SyncService extends ChangeNotifier {
   /// Called by repositories after they enqueue a write.
   Future<void> notifyDirty() async {
     await _refreshPending();
+    // In tests there is no background work to fire: the fire-and-forget
+    // tasks below race with tearDown and poison the next test's DB.
+    if (testMode) return;
     // Every write counts toward the auto-backup threshold (fire-and-forget;
     // backups must never block the sync flow).
     unawaited(BackupService.instance.recordChange());
@@ -157,6 +169,18 @@ class SyncService extends ChangeNotifier {
 
   Future<void> syncNow() async {
     if (_syncing) return;
+    // No server address saved: there is nothing to sync with. Without
+    // this guard a background sync (fired by notifyDirty() after every
+    // write) would burn slow timeouts against the unreachable default
+    // address and keep the local DB open long after the caller finished
+    // — in tests that re-opens the DB at a stale temp directory and the
+    // next test fails with a UNIQUE / disk I/O error. This early return
+    // touches no DB and no network, so it cannot re-open anything.
+    if (!BackendClient.instance.hasServerConfigured) {
+      _lastError = 'No server configured';
+      notifyListeners();
+      return;
+    }
     _syncing = true;
     _lastError = null;
     notifyListeners();
@@ -174,8 +198,16 @@ class SyncService extends ChangeNotifier {
     } catch (e) {
       _lastError = e.toString();
     } finally {
+      // Refresh the pending count BEFORE clearing _syncing: test
+      // tearDowns wait on isSyncing, and clearing the flag first let
+      // them close the DB while this refresh was still running
+      // ("database has already been closed"). The refresh is
+      // best-effort here so _syncing is always cleared even if the DB
+      // is already closed.
+      try {
+        await _refreshPending();
+      } catch (_) {}
       _syncing = false;
-      await _refreshPending();
       notifyListeners();
     }
   }

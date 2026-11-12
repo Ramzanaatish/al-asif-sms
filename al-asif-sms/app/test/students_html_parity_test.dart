@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:alasif_sms/repositories/student_repository.dart';
 import 'package:alasif_sms/services/db_factory.dart';
 import 'package:alasif_sms/services/local_db.dart';
+import 'package:alasif_sms/services/sync_service.dart';
 import 'package:alasif_sms/services/urdu_transliterate.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
@@ -55,6 +56,16 @@ void main() {
     });
 
     tearDown(() async {
+      // Every repository write fires notifyDirty(), which kicks off a
+      // background syncNow() (unawaited). Wait for it to settle before
+      // closing the DB and deleting the temp dir, or the next test's open
+      // races with the still-running sync and fails with a UNIQUE /
+      // disk I/O error. (Same guard as the other parity test files.)
+      final deadline = DateTime.now().add(const Duration(seconds: 15));
+      while (SyncService.instance.isSyncing &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
       await LocalDb.instance.close();
       await deleteTempDirQuietly(tmp);
     });

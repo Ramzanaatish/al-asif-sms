@@ -54,6 +54,12 @@ class LocalDb {
 
   Database? _db;
 
+  /// Directory the current [_db] was opened at. Tests point [LocalDb] at a
+  /// fresh temp dir per test (see [testDatabasesDir]); if the override
+  /// moved since this connection was opened, the cached connection
+  /// belongs to the previous test and must not be handed back.
+  String? _openDir;
+
   // Test-only override for the databases directory, so flutter test can
   // point the database at a temp folder instead of the app's data folder.
   // Never set in the app.
@@ -86,7 +92,20 @@ class LocalDb {
 
   Future<Database> get db async {
     final d = _db;
-    if (d != null) return d;
+    if (d != null) {
+      final testDir = _testDatabasesDir;
+      if (testDir == null || _openDir == testDir) return d;
+      // The test override moved to a new directory: the cached
+      // connection belongs to the previous test (a background
+      // sync/backup re-opened it after close()). Abandon it (do not
+      // close it here — a background task may still be using it, and
+      // closing a database mid-query corrupts the FFI isolate) and
+      // reopen at the new directory instead of handing back the
+      // previous test's rows.
+      _db = null;
+      _opening = null;
+      _openDir = null;
+    }
     // Serialise concurrent first-callers so the DB is opened/seeded once.
     final f = _opening ??= _open();
     try {
@@ -116,6 +135,11 @@ class LocalDb {
   Future<void> close() async {
     final d = _db;
     _db = null;
+    // Clear a possibly in-flight open too: without this, a stale
+    // _opening future could hand back a database opened at the old
+    // directory after close() (the next open would then reuse it).
+    _opening = null;
+    _openDir = null;
     await d?.close();
   }
 
@@ -287,6 +311,7 @@ class LocalDb {
     );
     await _maybeSeed(database);
     await _migrateLegacyQueue(database);
+    _openDir = dir;
     return database;
   }
 
